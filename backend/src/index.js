@@ -63,20 +63,21 @@ app.get('/api/db/status', async (req, res) => {
 });
 
 // ============================================
-// Placeholder for API Route Groups
+// API Route Groups
 // ============================================
 
-// TODO: Import and mount these routes as they're implemented
-// import productRoutes from './api/products.js';
-// import orderRoutes from './api/orders.js';
-// import customerRoutes from './api/customers.js';
-// import billRoutes from './api/bills.js';
-// import authRoutes from './api/auth.js';
+import productRoutes from './api/products.js';
+import orderRoutes from './api/orders.js';
+import billRoutes from './api/bills.js';
 
-// app.use('/api/products', productRoutes);
-// app.use('/api/orders', orderRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/bills', billRoutes);
+
+// TODO: Implement in Phase 2
+// import customerRoutes from './api/customers.js';
+// import authRoutes from './api/auth.js';
 // app.use('/api/customers', customerRoutes);
-// app.use('/api/bills', billRoutes);
 // app.use('/api/auth', authRoutes);
 
 // ============================================
