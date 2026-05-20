@@ -1,60 +1,133 @@
-import React from 'react'
+import React, { useState } from 'react';
+import { useAppDispatch, useAppSelector } from '../hooks/useStore';
+import { setOrderData } from '../store/slices/orderSlice';
+import { clearCart } from '../store/slices/cartSlice';
+import { api } from '../services/api';
+import ProductGrid from '../components/ProductGrid';
+import CartDisplay from '../components/CartDisplay';
+import CheckoutModal from '../components/CheckoutModal';
 
-/**
- * TellerScreen Component
- * Main POS interface for quick product selection and checkout
- *
- * TODO: Implement:
- * - Product grid with categories
- * - Shopping cart with item management
- * - Customer lookup/capture
- * - Payment method selection
- * - Bill & KOT printing
- */
 export default function TellerScreen() {
-  return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      <div className="bg-red-600 text-white p-4">
-        <h1 className="text-2xl font-bold">Bao to the Wings - POS</h1>
-      </div>
+  const dispatch = useAppDispatch();
+  const { items } = useAppSelector(state => state.cart);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string>('');
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Product Grid - Left Side */}
-        <div className="flex-1 p-6 overflow-auto">
-          <h2 className="text-lg font-bold mb-4">Products</h2>
-          <div className="grid grid-cols-3 gap-4">
-            {/* TODO: Replace with actual products from API */}
-            <div className="bg-white p-4 rounded-lg shadow cursor-pointer hover:shadow-lg">
-              <div className="text-center">
-                <p className="font-bold">Product 1</p>
-                <p className="text-gray-600">₹150</p>
-              </div>
-            </div>
+  const handleCheckout = async (paymentMethod: string, customerPhone?: string) => {
+    try {
+      setCheckoutLoading(true);
+
+      // Create order
+      const orderResponse = await api.createOrder({
+        items: items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        payment_method: paymentMethod
+      });
+
+      const orderId = orderResponse.data.order_id;
+      const totalAmount = orderResponse.data.total_amount;
+
+      // Create bill from order
+      const billResponse = await api.createBill({
+        order_id: orderId,
+        customer_phone: customerPhone
+      });
+
+      const billId = billResponse.data.bill_id;
+      const billNumber = billResponse.data.bill_number;
+
+      // Print bill
+      try {
+        await api.printBill(billId);
+      } catch (printError) {
+        console.warn('Print request sent, but printer may not be available');
+      }
+
+      // Update Redux with order details
+      dispatch(setOrderData({
+        currentOrderId: orderId,
+        paymentMethod,
+        printStatus: 'printed',
+        billNumber
+      }));
+
+      // Clear cart
+      dispatch(clearCart());
+
+      // Show success message
+      setSuccessMessage(`✓ Order #${billNumber} completed successfully!`);
+      setShowCheckout(false);
+
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(''), 5000);
+    } catch (error: any) {
+      throw new Error(error.message || 'Checkout failed. Please try again.');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-4 shadow-lg">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">🍗 Bao to the Wings</h1>
+            <p className="text-red-100 text-sm">Fast & Delicious QSR Service</p>
+          </div>
+          <div className="text-right text-sm">
+            <p className="text-red-100">
+              {new Date().toLocaleDateString('en-IN', {
+                weekday: 'short',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+              })}
+            </p>
+            <p className="text-red-100">
+              {new Date().toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </p>
           </div>
         </div>
+      </div>
+
+      {/* Success Message */}
+      {successMessage && (
+        <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mx-4 mt-4 rounded shadow">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">✓</span>
+            <p className="font-semibold">{successMessage}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="flex flex-1 overflow-hidden gap-4 p-4">
+        {/* Product Grid - Left Side */}
+        <ProductGrid />
 
         {/* Cart & Checkout - Right Side */}
-        <div className="w-80 bg-white shadow-lg flex flex-col">
-          <div className="bg-gray-800 text-white p-4">
-            <h2 className="text-lg font-bold">Bill</h2>
-          </div>
-
-          <div className="flex-1 p-4 overflow-auto">
-            {/* Cart items will go here */}
-            <p className="text-gray-500 text-center">Cart is empty</p>
-          </div>
-
-          <div className="border-t p-4">
-            <div className="flex justify-between mb-4">
-              <span className="font-bold">Total:</span>
-              <span className="text-2xl font-bold text-red-600">₹0</span>
-            </div>
-            <button className="w-full bg-red-600 text-white py-2 rounded font-bold hover:bg-red-700">
-              Checkout
-            </button>
-          </div>
-        </div>
+        <CartDisplay
+          onCheckout={() => setShowCheckout(true)}
+          checkoutLoading={checkoutLoading}
+        />
       </div>
+
+      {/* Checkout Modal */}
+      <CheckoutModal
+        isOpen={showCheckout}
+        onClose={() => setShowCheckout(false)}
+        onSubmit={handleCheckout}
+        loading={checkoutLoading}
+      />
     </div>
-  )
+  );
 }

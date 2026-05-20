@@ -46,6 +46,7 @@ export const api = {
   // Products
   getProducts: () => apiClient.get('/products'),
   getProductById: (id: string) => apiClient.get(`/products/${id}`),
+  getCategories: () => apiClient.get('/products/categories/list'),
   createProduct: (data: any) => apiClient.post('/products', data),
   updateProduct: (id: string, data: any) => apiClient.put(`/products/${id}`, data),
   deleteProduct: (id: string) => apiClient.delete(`/products/${id}`),
@@ -55,13 +56,15 @@ export const api = {
   getOrder: (id: string) => apiClient.get(`/orders/${id}`),
   getOrders: (filters?: any) => apiClient.get('/orders', { params: filters }),
   updateOrder: (id: string, data: any) => apiClient.put(`/orders/${id}`, data),
+  completeOrder: (id: string) => apiClient.post(`/orders/${id}/complete`),
   cancelOrder: (id: string, reason?: string) =>
     apiClient.post(`/orders/${id}/cancel`, { reason }),
 
   // Bills
-  printBill: (orderId: string) => apiClient.post(`/orders/${orderId}/print/bill`),
-  printKOT: (orderId: string) => apiClient.post(`/orders/${orderId}/print/kot`),
+  createBill: (data: any) => apiClient.post('/bills', data),
   getBill: (id: string) => apiClient.get(`/bills/${id}`),
+  getBills: (filters?: any) => apiClient.get('/bills', { params: filters }),
+  printBill: (billId: string) => apiClient.post(`/bills/${billId}/print`),
   cancelBill: (id: string, reason?: string) =>
     apiClient.post(`/bills/${id}/cancel`, { reason }),
 
