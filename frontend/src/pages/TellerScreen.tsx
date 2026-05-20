@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../hooks/useStore';
-import { setOrderData } from '../store/slices/orderSlice';
+import { setCurrentOrder, setPaymentMethod, setBillNumber, setPrintStatus, resetOrder } from '../store/slices/orderSlice';
 import { clearCart } from '../store/slices/cartSlice';
 import { api } from '../services/api';
 import ProductGrid from '../components/ProductGrid';
@@ -48,12 +48,10 @@ export default function TellerScreen() {
       }
 
       // Update Redux with order details
-      dispatch(setOrderData({
-        currentOrderId: orderId,
-        paymentMethod,
-        printStatus: 'printed',
-        billNumber
-      }));
+      dispatch(setCurrentOrder(orderId));
+      dispatch(setPaymentMethod(paymentMethod as 'cash' | 'card' | 'upi'));
+      dispatch(setBillNumber(parseInt(billNumber.replace('B', ''))));
+      dispatch(setPrintStatus('success'));
 
       // Clear cart
       dispatch(clearCart());
