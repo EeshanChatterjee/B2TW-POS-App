@@ -41,6 +41,7 @@ export const api = {
   // Authentication
   login: (username: string, password: string) =>
     apiClient.post('/auth/login', { username, password }),
+  validateToken: () => apiClient.get('/auth/validate'),
   logout: () => apiClient.post('/auth/logout'),
 
   // Products

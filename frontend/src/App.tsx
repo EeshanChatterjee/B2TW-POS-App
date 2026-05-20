@@ -8,6 +8,9 @@ import TellerScreen from './pages/TellerScreen'
 import AdminPanel from './pages/AdminPanel'
 import LoginPage from './pages/LoginPage'
 
+// Components
+import ProtectedRoute from './components/ProtectedRoute'
+
 function App() {
   return (
     <Provider store={store}>
@@ -18,9 +21,18 @@ function App() {
 
           {/* Main POS routes */}
           <Route path="/teller" element={<TellerScreen />} />
-          <Route path="/admin/*" element={<AdminPanel />} />
 
-          {/* Default redirect */}
+          {/* Admin routes (protected) */}
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminPanel />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Default redirect to teller */}
           <Route path="/" element={<Navigate to="/teller" replace />} />
           <Route path="*" element={<Navigate to="/teller" replace />} />
         </Routes>
