@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom variables */
+:root {
+  --primary: #ef4444;
+  --secondary: #f97316;
+  --success: #22c55e;
+  --warning: #eab308;
+  --error: #dc2626;
+  --dark: #1f2937;
+  --light: #f9fafb;
+
+  --radius: 0.5rem;
+  --transition: all 0.3s ease;
+}
+
+/* Global styles */
+* {
+  @apply transition-colors duration-200;
+}
+
+body {
+  @apply bg-light text-dark font-sans;
+}
+
+/* POS-specific styles */
+.btn-primary {
+  @apply px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium transition-colors;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 bg-gray-200 text-dark rounded hover:bg-gray-300 font-medium transition-colors;
+}
+
+.card {
+  @apply bg-white rounded-lg shadow-md p-6;
+}
+
+.input-field {
+  @apply w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200;
+}
+
+/* Responsive grid for product selection */
+.product-grid {
+  @apply grid gap-4 auto-fit [grid-auto-fit:minmax(150px,1fr)];
+}
+
+/* Bill item styling */
+.bill-item {
+  @apply flex justify-between py-2 border-b border-gray-200;
+}
+
+/* Admin styles */
+.admin-sidebar {
+  @apply fixed left-0 top-0 w-64 h-screen bg-dark text-white overflow-y-auto;
+}
+
+.admin-main {
+  @apply ml-64 p-6;
+}
+
+/* Loading and disabled states */
+.loading {
+  @apply opacity-60 pointer-events-none;
+}
+
+.disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Print styles for thermal printer */
+@media print {
+  body {
+    background: white;
+    color: black;
+    margin: 0;
+    padding: 0;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-container {
+    width: 80mm;
+    margin: 0;
+    padding: 0;
+  }
+}
