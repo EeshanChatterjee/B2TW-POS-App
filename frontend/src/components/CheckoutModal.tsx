@@ -6,13 +6,21 @@ interface CheckoutModalProps {
   onClose: () => void;
   onSubmit: (paymentMethod: string, customerPhone?: string) => Promise<void>;
   loading?: boolean;
+  customerPhone?: string;
 }
 
-export default function CheckoutModal({ isOpen, onClose, onSubmit, loading = false }: CheckoutModalProps) {
-  const { items, totalAmount } = useAppSelector(state => state.cart);
+export default function CheckoutModal({ isOpen, onClose, onSubmit, loading = false, customerPhone: initialPhone = '' }: CheckoutModalProps) {
+  const { items, total } = useAppSelector(state => state.cart);
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
-  const [customerPhone, setCustomerPhone] = useState<string>('');
+  const [customerPhone, setCustomerPhone] = useState<string>(initialPhone);
   const [error, setError] = useState<string>('');
+
+  // Sync phone from parent when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setCustomerPhone(initialPhone);
+    }
+  }, [isOpen, initialPhone]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,16 +67,34 @@ export default function CheckoutModal({ isOpen, onClose, onSubmit, loading = fal
             <h3 className="font-bold text-gray-800 mb-3">Order Summary</h3>
             <div className="space-y-2 text-sm mb-3 max-h-40 overflow-y-auto">
               {items.map(item => (
-                <div key={item.product_id} className="flex justify-between text-gray-700">
-                  <span>{item.name} × {item.quantity}</span>
+                <div key={item.productId} className="flex justify-between text-gray-700">
+                  <span>{item.productName} × {item.quantity}</span>
                   <span className="font-semibold">₹{(item.price * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
             </div>
-            <div className="flex justify-between pt-3 border-t border-gray-200">
-              <span className="font-bold text-gray-800">Total Amount</span>
-              <span className="text-2xl font-bold text-red-600">₹{totalAmount.toFixed(2)}</span>
-            </div>
+            {(() => {
+              const subtotal = total;
+              const tax = subtotal * 0.05;
+              const finalTotal = subtotal + tax;
+
+              return (
+                <>
+                  <div className="flex justify-between pt-3 text-sm border-t border-gray-200 mb-2">
+                    <span className="text-gray-700">Subtotal</span>
+                    <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm mb-3">
+                    <span className="text-gray-700">Tax (5% GST)</span>
+                    <span className="font-semibold">₹{tax.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-3 border-t-2 border-gray-300">
+                    <span className="font-bold text-gray-800">Total Amount</span>
+                    <span className="text-2xl font-bold text-red-600">₹{finalTotal.toFixed(2)}</span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           {/* Customer Phone (Optional) */}
@@ -78,6 +104,7 @@ export default function CheckoutModal({ isOpen, onClose, onSubmit, loading = fal
             </label>
             <input
               type="tel"
+              inputMode="numeric"
               value={customerPhone}
               onChange={e => setCustomerPhone(e.target.value)}
               placeholder="9876543210"

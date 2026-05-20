@@ -69,15 +69,15 @@ app.get('/api/db/status', async (req, res) => {
 import productRoutes from './api/products.js';
 import orderRoutes from './api/orders.js';
 import billRoutes from './api/bills.js';
+import customerRoutes from './api/customers.js';
 
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/bills', billRoutes);
+app.use('/api/customers', customerRoutes);
 
-// TODO: Implement in Phase 2
-// import customerRoutes from './api/customers.js';
+// TODO: Implement in Phase 3
 // import authRoutes from './api/auth.js';
-// app.use('/api/customers', customerRoutes);
 // app.use('/api/auth', authRoutes);
 
 // ============================================

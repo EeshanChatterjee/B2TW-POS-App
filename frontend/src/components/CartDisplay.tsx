@@ -2,31 +2,26 @@ import React from 'react';
 import { useAppDispatch, useAppSelector } from '../hooks/useStore';
 import { removeFromCart, updateQuantity, clearCart } from '../store/slices/cartSlice';
 
-interface CartItem {
-  product_id: number;
-  name: string;
-  price: number;
-  quantity: number;
-}
-
 interface CartDisplayProps {
   onCheckout: () => void;
+  onHoldBill: () => void;
   checkoutLoading?: boolean;
+  hasCustomerInfo?: boolean;
 }
 
-export default function CartDisplay({ onCheckout, checkoutLoading = false }: CartDisplayProps) {
+export default function CartDisplay({ onCheckout, onHoldBill, checkoutLoading = false, hasCustomerInfo = false }: CartDisplayProps) {
   const dispatch = useAppDispatch();
-  const { items, totalAmount } = useAppSelector(state => state.cart);
+  const { items, total } = useAppSelector(state => state.cart);
 
-  const handleRemoveItem = (productId: number) => {
+  const handleRemoveItem = (productId: string) => {
     dispatch(removeFromCart(productId));
   };
 
-  const handleQuantityChange = (productId: number, quantity: number) => {
+  const handleQuantityChange = (productId: string, quantity: number) => {
     if (quantity <= 0) {
       dispatch(removeFromCart(productId));
     } else {
-      dispatch(updateQuantity({ product_id: productId, quantity }));
+      dispatch(updateQuantity({ productId, quantity }));
     }
   };
 
@@ -37,7 +32,7 @@ export default function CartDisplay({ onCheckout, checkoutLoading = false }: Car
   };
 
   return (
-    <div className="w-96 bg-white shadow-lg flex flex-col border-l border-gray-200">
+    <div className="w-64 md:w-80 lg:w-96 bg-white shadow-lg flex flex-col border-l border-gray-200">
       {/* Header */}
       <div className="bg-gray-800 text-white p-4 flex justify-between items-center">
         <h2 className="text-lg font-bold">Bill</h2>
@@ -61,15 +56,15 @@ export default function CartDisplay({ onCheckout, checkoutLoading = false }: Car
           </div>
         ) : (
           <div className="space-y-3">
-            {items.map((item: CartItem) => (
+            {items.map((item) => (
               <div
-                key={item.product_id}
+                key={item.productId}
                 className="bg-gray-50 p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
               >
                 {/* Item Name and Price */}
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1">
-                    <h4 className="font-semibold text-sm text-gray-800">{item.name}</h4>
+                    <h4 className="font-semibold text-sm text-gray-800">{item.productName}</h4>
                     <p className="text-xs text-gray-600">₹{item.price} each</p>
                   </div>
                   <p className="font-bold text-sm text-red-600">₹{(item.price * item.quantity).toFixed(2)}</p>
@@ -79,21 +74,21 @@ export default function CartDisplay({ onCheckout, checkoutLoading = false }: Car
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 bg-white border border-gray-300 rounded">
                     <button
-                      onClick={() => handleQuantityChange(item.product_id, item.quantity - 1)}
+                      onClick={() => handleQuantityChange(item.productId, item.quantity - 1)}
                       className="w-6 h-6 flex items-center justify-center text-sm font-bold text-gray-600 hover:bg-gray-100"
                     >
                       −
                     </button>
                     <span className="w-6 text-center text-sm font-semibold">{item.quantity}</span>
                     <button
-                      onClick={() => handleQuantityChange(item.product_id, item.quantity + 1)}
+                      onClick={() => handleQuantityChange(item.productId, item.quantity + 1)}
                       className="w-6 h-6 flex items-center justify-center text-sm font-bold text-gray-600 hover:bg-gray-100"
                     >
                       +
                     </button>
                   </div>
                   <button
-                    onClick={() => handleRemoveItem(item.product_id)}
+                    onClick={() => handleRemoveItem(item.productId)}
                     className="text-xs bg-red-100 text-red-600 hover:bg-red-200 px-2 py-1 rounded transition-colors font-semibold"
                   >
                     Remove
@@ -110,48 +105,72 @@ export default function CartDisplay({ onCheckout, checkoutLoading = false }: Car
 
       {/* Totals and Checkout */}
       <div className="bg-gray-50 p-4">
-        {/* Subtotal */}
-        <div className="flex justify-between mb-3 text-sm">
-          <span className="text-gray-600">Subtotal</span>
-          <span className="font-semibold">₹{totalAmount.toFixed(2)}</span>
-        </div>
+        {(() => {
+          const subtotal = total;
+          const tax = subtotal * 0.05;
+          const finalTotal = subtotal + tax;
 
-        {/* Tax (if any) */}
-        <div className="flex justify-between mb-4 text-sm">
-          <span className="text-gray-600">Tax</span>
-          <span className="font-semibold">₹0.00</span>
-        </div>
+          return (
+            <>
+              {/* Subtotal */}
+              <div className="flex justify-between mb-3 text-sm">
+                <span className="text-gray-600">Subtotal</span>
+                <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
+              </div>
 
-        {/* Total */}
-        <div className="flex justify-between mb-4 pb-4 border-t-2 border-gray-300">
-          <span className="font-bold text-gray-800">Total</span>
-          <span className="text-2xl font-bold text-red-600">₹{totalAmount.toFixed(2)}</span>
-        </div>
+              {/* Tax (5% GST) */}
+              <div className="flex justify-between mb-4 text-sm">
+                <span className="text-gray-600">Tax (5%)</span>
+                <span className="font-semibold">₹{tax.toFixed(2)}</span>
+              </div>
+
+              {/* Total */}
+              <div className="flex justify-between mb-4 pb-4 border-t-2 border-gray-300">
+                <span className="font-bold text-gray-800">Total</span>
+                <span className="text-2xl font-bold text-red-600">₹{finalTotal.toFixed(2)}</span>
+              </div>
+            </>
+          );
+        })()}
 
         {/* Item Count */}
         <div className="text-center text-xs text-gray-500 mb-4">
           {items.length} item{items.length !== 1 ? 's' : ''} in cart
         </div>
 
-        {/* Checkout Button */}
-        <button
-          onClick={onCheckout}
-          disabled={items.length === 0 || checkoutLoading}
-          className={`w-full py-3 rounded-lg font-bold text-white transition-colors ${
-            items.length === 0 || checkoutLoading
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-red-600 hover:bg-red-700 active:bg-red-800'
-          }`}
-        >
-          {checkoutLoading ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-              Processing...
-            </span>
-          ) : (
-            'Proceed to Checkout'
-          )}
-        </button>
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={onHoldBill}
+            disabled={items.length === 0 || !hasCustomerInfo}
+            className={`flex-1 py-3 rounded-lg font-bold transition-colors ${
+              items.length === 0 || !hasCustomerInfo
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-yellow-500 text-white hover:bg-yellow-600 active:bg-yellow-700'
+            }`}
+            title={!hasCustomerInfo ? 'Please enter customer name and phone' : ''}
+          >
+            Hold Bill
+          </button>
+          <button
+            onClick={onCheckout}
+            disabled={items.length === 0 || checkoutLoading}
+            className={`flex-1 py-3 rounded-lg font-bold text-white transition-colors ${
+              items.length === 0 || checkoutLoading
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-red-600 hover:bg-red-700 active:bg-red-800'
+            }`}
+          >
+            {checkoutLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                Processing...
+              </span>
+            ) : (
+              'Print Bill'
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

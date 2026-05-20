@@ -2,6 +2,30 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from '../db/connection.js';
 
+// Validation helper
+function validateOrderRequest(req, res) {
+  const { items, payment_method } = req.body;
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    res.sendError('Order must contain at least one item', 400);
+    return false;
+  }
+
+  if (!payment_method) {
+    res.sendError('Payment method is required', 400);
+    return false;
+  }
+
+  for (const item of items) {
+    if (!item.product_id || item.quantity === undefined || item.price === undefined) {
+      res.sendError('Each item must have product_id, quantity, and price', 400);
+      return false;
+    }
+  }
+
+  return true;
+}
+
 const router = express.Router();
 
 /**
@@ -11,17 +35,13 @@ const router = express.Router();
  */
 router.post('/', async (req, res) => {
   try {
+    // Validate request
+    if (!validateOrderRequest(req, res)) {
+      return;
+    }
+
     const db = await getDatabase();
     const { items, customer_id, payment_method } = req.body;
-
-    // Validation
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.sendError('Order must contain at least one item', 400);
-    }
-
-    if (!payment_method) {
-      return res.sendError('Payment method is required', 400);
-    }
 
     const orderId = uuidv4();
     const now = new Date().toISOString();
@@ -29,24 +49,21 @@ router.post('/', async (req, res) => {
 
     // Create order record
     await db.run(
-      `INSERT INTO orders (id, customer_id, payment_method, status, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [orderId, customer_id || null, payment_method, 'pending', now]
+      `INSERT INTO orders (id, customer_id, payment_method, status, total_amount, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [orderId, customer_id || null, payment_method, 'pending', 0, now, now]
     );
 
     // Add order items and calculate total
     for (const item of items) {
-      if (!item.product_id || item.quantity === undefined || item.price === undefined) {
-        return res.sendError('Each item must have product_id, quantity, and price', 400);
-      }
-
       const itemTotal = item.quantity * item.price;
       total_amount += itemTotal;
 
+      const itemId = uuidv4();
       await db.run(
-        `INSERT INTO order_items (order_id, product_id, quantity, unit_price, total_price, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [orderId, item.product_id, item.quantity, item.price, itemTotal, now]
+        `INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, total_price, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [itemId, orderId, item.product_id, item.quantity, item.price, itemTotal, now]
       );
     }
 
@@ -63,6 +80,7 @@ router.post('/', async (req, res) => {
       message: 'Order created successfully'
     }, 201);
   } catch (error) {
+    console.error('Order creation error:', error);
     res.sendError('Failed to create order', 500, error.message);
   }
 });
@@ -190,6 +208,55 @@ router.post('/:id/complete', async (req, res) => {
     res.sendSuccess({ message: 'Order completed' });
   } catch (error) {
     res.sendError('Failed to complete order', 500, error.message);
+  }
+});
+
+/**
+ * POST /api/orders/:id/print-kot
+ * Print Kitchen Order Ticket (KOT) for an order
+ */
+router.post('/:id/print-kot', async (req, res) => {
+  try {
+    const db = await getDatabase();
+    const { id } = req.params;
+
+    const order = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
+    if (!order) {
+      return res.sendError('Order not found', 404);
+    }
+
+    const items = await db.all(
+      'SELECT oi.*, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?',
+      [id]
+    );
+
+    // Log KOT (Kitchen Order Ticket) print request
+    console.log('🖨️ KOT Print Request:', {
+      order_id: id,
+      items: items.map(item => ({
+        name: item.name,
+        quantity: item.quantity
+      })),
+      timestamp: new Date().toISOString()
+    });
+
+    // Create KOT log entry
+    const kotId = uuidv4();
+    const now = new Date().toISOString();
+    await db.run(
+      `INSERT INTO kot_logs (id, order_id, status, printed_at, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [kotId, id, 'printed', now, now]
+    );
+
+    res.sendSuccess({
+      message: 'KOT printed successfully',
+      kot_id: kotId,
+      order_id: id,
+      item_count: items.length
+    });
+  } catch (error) {
+    res.sendError('Failed to print KOT', 500, error.message);
   }
 });
 

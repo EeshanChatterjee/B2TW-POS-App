@@ -10,6 +10,8 @@
     "test": "node --test src/**/*.test.js",
     "db:init": "node src/db/init.js",
     "db:migrate": "node src/db/migrate.js",
+    "menu:parse": "node src/db/parseMenu.js",
+    "menu:refresh": "node src/db/refreshMenu.js",
     "lint": "eslint src/"
   },
   "keywords": [
@@ -21,16 +23,16 @@
   "author": "Bao to the Wings",
   "license": "PROPRIETARY",
   "dependencies": {
-    "express": "^4.18.2",
-    "sqlite3": "^5.1.6",
-    "sqlite": "^5.0.1",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "uuid": "^9.0.0",
-    "serialport": "^10.4.0",
-    "escpos": "^3.0.0",
     "date-fns": "^2.30.0",
-    "lodash-es": "^4.17.21"
+    "dotenv": "^16.3.1",
+    "escpos": "^2.4.0",
+    "express": "^4.18.2",
+    "lodash-es": "^4.17.21",
+    "serialport": "^10.4.0",
+    "sqlite": "^5.0.1",
+    "sqlite3": "^6.0.1",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "eslint": "^8.48.0",

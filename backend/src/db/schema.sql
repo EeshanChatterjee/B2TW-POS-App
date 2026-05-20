@@ -56,14 +56,18 @@ CREATE TABLE IF NOT EXISTS order_items (
 CREATE TABLE IF NOT EXISTS bills (
   id TEXT PRIMARY KEY,
   order_id TEXT UNIQUE NOT NULL,
-  bill_number INTEGER,
-  is_cancelled BOOLEAN DEFAULT 0,
-  cancellation_reason TEXT,
-  cancellation_date DATETIME,
-  cancelled_by TEXT,
-  printed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  bill_number TEXT NOT NULL,
+  customer_id TEXT,
+  total_amount REAL NOT NULL,
+  payment_method TEXT,
+  status TEXT DEFAULT 'pending',
+  notes TEXT,
+  printed_at DATETIME,
+  cancelled_at DATETIME,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (order_id) REFERENCES orders(id)
+  FOREIGN KEY (order_id) REFERENCES orders(id),
+  FOREIGN KEY (customer_id) REFERENCES customers(id)
 );
 
 -- Admin Users Table

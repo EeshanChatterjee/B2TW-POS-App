@@ -1,7 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from '../db/connection.js';
-import { printBill } from '../utils/printerService.js';
+import PrinterService from '../utils/printerService.js';
 
 const router = express.Router();
 
@@ -46,6 +46,30 @@ router.post('/', async (req, res) => {
     const billId = uuidv4();
     const now = new Date().toISOString();
 
+    // Calculate GST breakdown
+    let totalBaseAmount = 0;
+    let totalGstAmount = 0;
+    const itemsWithGst = items.map(item => {
+      const itemBaseAmount = item.total_price / 1.05;
+      const itemGstAmount = item.total_price - itemBaseAmount;
+      totalBaseAmount += itemBaseAmount;
+      totalGstAmount += itemGstAmount;
+
+      return {
+        name: item.name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        base_unit_price: parseFloat((item.unit_price / 1.05).toFixed(2)),
+        total_price: item.total_price,
+        base_total: parseFloat(itemBaseAmount.toFixed(2)),
+        gst_total: parseFloat(itemGstAmount.toFixed(2))
+      };
+    });
+
+    const subtotalBase = parseFloat(totalBaseAmount.toFixed(2));
+    const gstAmount = parseFloat(totalGstAmount.toFixed(2));
+    console.log('📋 Bill GST Breakdown:', { subtotalBase, gstAmount, total: order.total_amount, itemCount: items.length });
+
     // Create bill record
     await db.run(
       `INSERT INTO bills (id, order_id, bill_number, customer_id, total_amount, payment_method, status, created_at)
@@ -57,13 +81,10 @@ router.post('/', async (req, res) => {
       bill_id: billId,
       bill_number,
       order_id,
+      items: itemsWithGst,
+      subtotal_base: subtotalBase,
+      gst_amount: gstAmount,
       total_amount: order.total_amount,
-      items: items.map(item => ({
-        name: item.name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: item.total_price
-      })),
       customer,
       message: 'Bill created successfully'
     }, 201);
@@ -103,9 +124,27 @@ router.get('/:id', async (req, res) => {
       customer = await db.get('SELECT * FROM customers WHERE id = ?', [bill.customer_id]);
     }
 
+    // Calculate GST breakdown
+    let totalBaseAmount = 0;
+    let totalGstAmount = 0;
+    const itemsWithGst = items.map(item => {
+      const itemBaseAmount = item.total_price / 1.05;
+      const itemGstAmount = item.total_price - itemBaseAmount;
+      totalBaseAmount += itemBaseAmount;
+      totalGstAmount += itemGstAmount;
+
+      return {
+        ...item,
+        base_total: parseFloat(itemBaseAmount.toFixed(2)),
+        gst_total: parseFloat(itemGstAmount.toFixed(2))
+      };
+    });
+
     res.sendSuccess({
       ...bill,
-      items,
+      items: itemsWithGst,
+      subtotal_base: parseFloat(totalBaseAmount.toFixed(2)),
+      gst_amount: parseFloat(totalGstAmount.toFixed(2)),
       customer
     });
   } catch (error) {
@@ -136,9 +175,20 @@ router.get('/', async (req, res) => {
 
     const bills = await db.all(query, params);
 
+    // Calculate GST breakdown for each bill
+    const billsWithGst = bills.map(bill => {
+      const baseAmount = bill.total_amount / 1.05;
+      const gstAmount = bill.total_amount - baseAmount;
+      return {
+        ...bill,
+        subtotal_base: parseFloat(baseAmount.toFixed(2)),
+        gst_amount: parseFloat(gstAmount.toFixed(2))
+      };
+    });
+
     res.sendSuccess({
-      count: bills.length,
-      bills
+      count: billsWithGst.length,
+      bills: billsWithGst
     });
   } catch (error) {
     res.sendError('Failed to fetch bills', 500, error.message);
@@ -170,18 +220,34 @@ router.post('/:id/print', async (req, res) => {
       ? await db.get('SELECT * FROM customers WHERE id = ?', [bill.customer_id])
       : null;
 
-    // Format bill data
-    const billData = {
-      bill_number: bill.bill_number,
-      date: new Date(bill.created_at).toLocaleString('en-IN'),
-      items: items.map(item => ({
+    // Format bill data with GST splitting
+    // All prices include 5% GST: base = price / 1.05, gst = price - base
+    let totalBaseAmount = 0;
+    let totalGstAmount = 0;
+
+    const itemsWithGst = items.map(item => {
+      const itemBaseAmount = item.total_price / 1.05;
+      const itemGstAmount = item.total_price - itemBaseAmount;
+      totalBaseAmount += itemBaseAmount;
+      totalGstAmount += itemGstAmount;
+
+      return {
         name: item.name,
         qty: item.quantity,
         price: item.unit_price,
-        total: item.total_price
-      })),
-      subtotal: order.total_amount,
-      tax: 0, // TODO: Calculate tax if needed
+        base_price: item.unit_price / 1.05,
+        total: item.total_price,
+        base_total: itemBaseAmount,
+        gst_total: itemGstAmount
+      };
+    });
+
+    const billData = {
+      bill_number: bill.bill_number,
+      date: new Date(bill.created_at).toLocaleString('en-IN'),
+      items: itemsWithGst,
+      subtotal_base: parseFloat(totalBaseAmount.toFixed(2)),
+      gst_amount: parseFloat(totalGstAmount.toFixed(2)),
       total: order.total_amount,
       payment_method: order.payment_method,
       customer_name: customer?.name || 'Guest'
@@ -189,7 +255,27 @@ router.post('/:id/print', async (req, res) => {
 
     // Print bill (will log if printer not available)
     try {
-      await printBill(billData);
+      const printerPort = process.env.PRINTER_PORT || '/dev/ttyUSB0';
+      const printer = new PrinterService(printerPort);
+
+      if (await printer.initialize()) {
+        await printer.printBill({
+          bill_number: billData.bill_number,
+          items: billData.items.map(item => ({
+            product_name: item.name,
+            quantity: item.qty,
+            unit_price: item.price,
+            base_total: item.base_total,
+            gst_total: item.gst_total,
+            total: item.total
+          })),
+          subtotal_base: billData.subtotal_base,
+          gst_amount: billData.gst_amount,
+          total: billData.total,
+          customer_phone: customer?.phone
+        });
+      }
+      printer.close();
     } catch (printerError) {
       console.warn('Printer warning:', printerError.message);
       // Continue even if printer fails - bill is still created

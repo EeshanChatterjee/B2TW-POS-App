@@ -59,6 +59,7 @@ export const api = {
   completeOrder: (id: string) => apiClient.post(`/orders/${id}/complete`),
   cancelOrder: (id: string, reason?: string) =>
     apiClient.post(`/orders/${id}/cancel`, { reason }),
+  printKOT: (orderId: string) => apiClient.post(`/orders/${orderId}/print-kot`),
 
   // Bills
   createBill: (data: any) => apiClient.post('/bills', data),
