@@ -66,19 +66,23 @@ app.get('/api/db/status', async (req, res) => {
 // API Route Groups
 // ============================================
 
+import authRoutes from './api/auth.js';
 import productRoutes from './api/products.js';
 import orderRoutes from './api/orders.js';
 import billRoutes from './api/bills.js';
 import customerRoutes from './api/customers.js';
+import reportRoutes from './api/reports.js';
+import inventoryRoutes from './api/inventory.js';
+import settingsRoutes from './api/settings.js';
 
+app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/bills', billRoutes);
 app.use('/api/customers', customerRoutes);
-
-// TODO: Implement in Phase 3
-// import authRoutes from './api/auth.js';
-// app.use('/api/auth', authRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // ============================================
 // Error Handling

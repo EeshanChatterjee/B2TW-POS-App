@@ -1,6 +1,64 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from '../db/connection.js';
+import {
+  roundToCents,
+  calculateBasePrice,
+  calculateGSTAmount,
+  getPriceBreakdown,
+  sumTotalPrices
+} from '../utils/priceCalculations.js';
+
+/**
+ * Generate anonymous customer ID for walk-in customers
+ * Format: CUSTYYYYMMDDXXX where XXX is a counter for that day
+ */
+async function generateAnonymousCustomerId(db) {
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
+
+  // Count existing customers for this date
+  const result = await db.get(
+    `SELECT COUNT(*) as count FROM customers
+     WHERE id LIKE ? || '%'`,
+    [`CUST${dateStr}`]
+  );
+
+  const counter = (result?.count || 0) + 1;
+  const customerId = `CUST${dateStr}${String(counter).padStart(3, '0')}`;
+
+  return customerId;
+}
+
+/**
+ * Format order item with price breakdown (base + GST calculated on-the-fly)
+ * @param {Object} item - Order item from database
+ * @returns {Object} Formatted item with total_price and breakdown
+ */
+function formatOrderItem(item) {
+  const breakdown = getPriceBreakdown(item.total_price);
+  return {
+    ...item,
+    total_price: item.total_price,
+    base_price: breakdown.base_price,
+    gst_amount: breakdown.gst_amount
+  };
+}
+
+/**
+ * Format order with price breakdown (base + GST calculated on-the-fly)
+ * @param {Object} order - Order from database
+ * @returns {Object} Formatted order with total_price and breakdown
+ */
+function formatOrder(order) {
+  const breakdown = getPriceBreakdown(order.total_amount);
+  return {
+    ...order,
+    total_price: order.total_amount,
+    base_price: breakdown.base_price,
+    gst_amount: breakdown.gst_amount
+  };
+}
 
 // Validation helper
 function validateOrderRequest(req, res) {
@@ -41,22 +99,36 @@ router.post('/', async (req, res) => {
     }
 
     const db = await getDatabase();
-    const { items, customer_id, payment_method } = req.body;
+    let { items, customer_id, payment_method } = req.body;
 
     const orderId = uuidv4();
     const now = new Date().toISOString();
     let total_amount = 0;
 
+    // Generate anonymous customer ID if not provided
+    if (!customer_id) {
+      customer_id = await generateAnonymousCustomerId(db);
+
+      // Create customer record for this anonymous customer
+      await db.run(
+        `INSERT INTO customers (id, name, created_at)
+         VALUES (?, ?, ?)`,
+        [customer_id, 'Walk-in Customer', now]
+      );
+    }
+
     // Create order record
     await db.run(
       `INSERT INTO orders (id, customer_id, payment_method, status, total_amount, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [orderId, customer_id || null, payment_method, 'pending', 0, now, now]
+      [orderId, customer_id, payment_method, 'pending', 0, now, now]
     );
 
     // Add order items and calculate total
+    // All prices are stored and communicated as total_price (GST-inclusive)
     for (const item of items) {
-      const itemTotal = item.quantity * item.price;
+      // Use cents-based rounding to prevent floating-point precision errors
+      const itemTotal = roundToCents(item.quantity * item.price);
       total_amount += itemTotal;
 
       const itemId = uuidv4();
@@ -67,15 +139,21 @@ router.post('/', async (req, res) => {
       );
     }
 
+    // Use sumTotalPrices for safe aggregation to prevent floating-point errors
+    const roundedTotal = sumTotalPrices([total_amount]);
+
     // Update order total
     await db.run(
       'UPDATE orders SET total_amount = ?, updated_at = ? WHERE id = ?',
-      [total_amount, now, orderId]
+      [roundedTotal, now, orderId]
     );
+
+    const priceBreakdown = getPriceBreakdown(roundedTotal);
 
     res.sendSuccess({
       order_id: orderId,
-      total_amount,
+      total_price: roundedTotal,
+      ...priceBreakdown,
       status: 'pending',
       message: 'Order created successfully'
     }, 201);
@@ -108,9 +186,12 @@ router.get('/:id', async (req, res) => {
       [id]
     );
 
+    const formattedOrder = formatOrder(order);
+    const formattedItems = items.map(item => formatOrderItem(item));
+
     res.sendSuccess({
-      ...order,
-      items
+      ...formattedOrder,
+      items: formattedItems
     });
   } catch (error) {
     res.sendError('Failed to fetch order', 500, error.message);
@@ -144,10 +225,11 @@ router.get('/', async (req, res) => {
     params.push(parseInt(limit), parseInt(offset));
 
     const orders = await db.all(query, params);
+    const formattedOrders = orders.map(order => formatOrder(order));
 
     res.sendSuccess({
-      count: orders.length,
-      orders
+      count: formattedOrders.length,
+      orders: formattedOrders
     });
   } catch (error) {
     res.sendError('Failed to fetch orders', 500, error.message);

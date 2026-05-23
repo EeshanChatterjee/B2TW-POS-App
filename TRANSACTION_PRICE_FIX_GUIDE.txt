@@ -1,0 +1,140 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                  TRANSACTION PRICE FIX - QUICK REFERENCE                      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+PROBLEM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Order items, orders, and bills may have prices that don't match current menu
+prices. This could happen due to:
+  • Menu price changes after orders were placed
+  • Price calculation errors
+  • Data migration issues
+  • Manual database modifications
+
+SOLUTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Two scripts have been created:
+
+  1. validate-transaction-prices.js   → Analyze WITHOUT making changes
+  2. fix-transaction-prices.js        → Fix all discrepancies
+
+QUICK START
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1: Check what needs to be fixed
+────────────────────────────────────
+  cd /Users/eeshanchatterjee/Documents/Claude/Projects/B2TW\ POS\ App/backend
+  node src/db/migrations/validate-transaction-prices.js
+
+  Output shows:
+    ✓ Number of orders checked
+    ✓ Number of items with wrong prices
+    ✓ Number of orders with wrong totals
+    ✓ Number of bills with wrong amounts
+
+Step 2: Back up your database
+─────────────────────────────
+  cp db/pos.sqlite db/pos.sqlite.backup
+
+Step 3: Apply fixes
+───────────────────
+  node src/db/migrations/fix-transaction-prices.js
+
+  Output shows:
+    ✓ Each item/order/bill that was fixed
+    ✓ Total counts of fixes applied
+    ✓ Verification results
+
+Step 4: Verify everything is fixed
+──────────────────────────────────
+  node src/db/migrations/validate-transaction-prices.js
+
+  Should show: "All transaction prices are consistent and correct!"
+
+WHAT GETS FIXED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+order_items Table:
+  • unit_price → Updated to match current menu price
+  • total_price → Recalculated as quantity × unit_price
+
+orders Table:
+  • total_amount → Recalculated from SUM of order_items.total_price
+  • updated_at → Set to current timestamp
+
+bills Table:
+  • total_amount → Updated to match their corresponding order.total_amount
+  • updated_at → Set to current timestamp
+
+IMPORTANT NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  ALWAYS validate first before running the fix!
+
+⚠️  ALWAYS back up your database before applying fixes!
+
+⚠️  These scripts are safe - they only fix data integrity issues and verify
+    the results.
+
+✓ The validation script runs as many times as you want with no side effects
+
+✓ If you're not sure about discrepancies, contact the development team
+
+✓ Full documentation is in:
+  /backend/src/db/migrations/TRANSACTION_PRICE_FIX.md
+
+FILE LOCATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Validation Script:  /backend/src/db/migrations/validate-transaction-prices.js
+  Fix Script:         /backend/src/db/migrations/fix-transaction-prices.js
+  Full Docs:          /backend/src/db/migrations/TRANSACTION_PRICE_FIX.md
+  Database:           /backend/db/pos.sqlite
+
+EXAMPLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Example 1: Item with old price
+  Product "Bao" current price: ₹160
+  Order item stored price: ₹150
+  → Fix will update to ₹160
+
+Example 2: Order with incorrect total
+  Order total stored: ₹450.50
+  Correct total (sum of items): ₹480.00
+  → Fix will recalculate to ₹480.00
+
+Example 3: Bill not matching order
+  Bill amount: ₹450.50
+  Order amount: ₹480.00
+  → Fix will update bill to ₹480.00
+
+VALIDATION OUTPUT MEANINGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ All prices match menu prices     → No fix needed, everything is correct
+⚠️  Found N items with incorrect    → Items are using old menu prices
+⚠️  Found N orders with incorrect   → Order totals don't match items sum
+⚠️  Found N bills with incorrect    → Bills don't match their orders
+
+TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Error: "Cannot find database"
+  → Check that db/pos.sqlite exists in the backend directory
+  → Run from: /backend directory
+
+Error: "Connection refused"
+  → Database might be locked by another process
+  → Try running the script again after a few seconds
+
+Error: "No migrations directory"
+  → Make sure you're running from the /backend directory
+  → Check that /backend/src/db/migrations exists
+
+Questions?
+  → Read the full documentation in TRANSACTION_PRICE_FIX.md
+  → Check that your database backup was created before running the fix
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                            END OF QUICK REFERENCE                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝

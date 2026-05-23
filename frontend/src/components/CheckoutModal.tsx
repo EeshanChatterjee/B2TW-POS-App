@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppSelector } from '../hooks/useStore';
+import { getPriceBreakdown } from '../utils/priceCalculations';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -74,23 +75,23 @@ export default function CheckoutModal({ isOpen, onClose, onSubmit, loading = fal
               ))}
             </div>
             {(() => {
-              const subtotal = total;
-              const tax = subtotal * 0.05;
-              const finalTotal = subtotal + tax;
+              // total is already GST-inclusive (total_price)
+              // Calculate breakdown on-the-fly
+              const breakdown = getPriceBreakdown(total);
 
               return (
                 <>
                   <div className="flex justify-between pt-3 text-sm border-t border-gray-200 mb-2">
                     <span className="text-gray-700">Subtotal</span>
-                    <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
+                    <span className="font-semibold">₹{breakdown.base_price.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm mb-3">
                     <span className="text-gray-700">Tax (5% GST)</span>
-                    <span className="font-semibold">₹{tax.toFixed(2)}</span>
+                    <span className="font-semibold">₹{breakdown.gst_amount.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between pt-3 border-t-2 border-gray-300">
                     <span className="font-bold text-gray-800">Total Amount</span>
-                    <span className="text-2xl font-bold text-red-600">₹{finalTotal.toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-red-600">₹{breakdown.total_price.toFixed(2)}</span>
                   </div>
                 </>
               );

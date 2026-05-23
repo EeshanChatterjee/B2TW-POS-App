@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppDispatch } from '@/hooks/useStore'
 import { loginSuccess, loginError } from '@/store/slices/authSlice'
+import { api } from '@/services/api'
 
 /**
  * LoginPage Component
@@ -24,24 +25,27 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    try {
-      // TODO: Replace with actual API call
-      // const response = await api.login(username, password)
-      // dispatch(loginSuccess({ ...response }))
+    if (!username || !password) {
+      setError('Username and password are required')
+      setLoading(false)
+      return
+    }
 
-      // For now, accept default credentials
-      if (username === 'admin' && password === 'admin123') {
+    try {
+      const response = await api.login(username, password)
+
+      if (response && response.token && response.user) {
         dispatch(loginSuccess({
-          username,
-          role: 'admin',
-          token: 'test-token-123'
+          username: response.user.username,
+          role: response.user.role,
+          token: response.token
         }))
         navigate('/admin')
       } else {
-        throw new Error('Invalid credentials')
+        throw new Error('Invalid response from server')
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Login failed'
+    } catch (err: any) {
+      const message = err.response?.data?.error || (err instanceof Error ? err.message : 'Login failed')
       setError(message)
       dispatch(loginError(message))
     } finally {

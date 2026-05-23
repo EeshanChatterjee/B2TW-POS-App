@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAppDispatch, useAppSelector } from '../hooks/useStore';
 import { removeFromCart, updateQuantity, clearCart } from '../store/slices/cartSlice';
+import { getPriceBreakdown } from '../utils/priceCalculations';
 
 interface CartDisplayProps {
   onCheckout: () => void;
@@ -106,28 +107,28 @@ export default function CartDisplay({ onCheckout, onHoldBill, checkoutLoading = 
       {/* Totals and Checkout */}
       <div className="bg-gray-50 p-4">
         {(() => {
-          const subtotal = total;
-          const tax = subtotal * 0.05;
-          const finalTotal = subtotal + tax;
+          // total is already GST-inclusive (total_price)
+          // Calculate breakdown on-the-fly
+          const breakdown = getPriceBreakdown(total);
 
           return (
             <>
-              {/* Subtotal */}
+              {/* Subtotal (base price) */}
               <div className="flex justify-between mb-3 text-sm">
                 <span className="text-gray-600">Subtotal</span>
-                <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
+                <span className="font-semibold">₹{breakdown.base_price.toFixed(2)}</span>
               </div>
 
               {/* Tax (5% GST) */}
               <div className="flex justify-between mb-4 text-sm">
                 <span className="text-gray-600">Tax (5%)</span>
-                <span className="font-semibold">₹{tax.toFixed(2)}</span>
+                <span className="font-semibold">₹{breakdown.gst_amount.toFixed(2)}</span>
               </div>
 
               {/* Total */}
               <div className="flex justify-between mb-4 pb-4 border-t-2 border-gray-300">
                 <span className="font-bold text-gray-800">Total</span>
-                <span className="text-2xl font-bold text-red-600">₹{finalTotal.toFixed(2)}</span>
+                <span className="text-2xl font-bold text-red-600">₹{breakdown.total_price.toFixed(2)}</span>
               </div>
             </>
           );
