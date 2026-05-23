@@ -74,7 +74,7 @@ router.post('/', async (req, res) => {
     await db.run(
       `INSERT INTO bills (id, order_id, bill_number, customer_id, total_amount, payment_method, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [billId, order_id, bill_number, order.customer_id || null, order.total_amount, order.payment_method, 'pending', now]
+      [billId, order_id, bill_number, order.customer_id || null, order.total_amount, order.payment_method, 'paid', now]
     );
 
     res.sendSuccess({
@@ -90,6 +90,39 @@ router.post('/', async (req, res) => {
     }, 201);
   } catch (error) {
     res.sendError('Failed to create bill', 500, error.message);
+  }
+});
+
+/**
+ * GET /api/bills/held
+ * Get all held bills
+ */
+router.get('/held', async (req, res) => {
+  try {
+    const db = await getDatabase();
+    const { limit = 50, offset = 0 } = req.query;
+
+    const heldBills = await db.all(
+      `SELECT b.*, bh.id as hold_id, bh.reason, bh.held_at, bh.notes
+       FROM bills b
+       JOIN bill_holds bh ON b.id = bh.bill_id
+       WHERE b.status = 'held' AND bh.resumed_at IS NULL
+       ORDER BY bh.held_at DESC
+       LIMIT ? OFFSET ?`,
+      [parseInt(limit), parseInt(offset)]
+    );
+
+    const countResult = await db.get(
+      `SELECT COUNT(*) as count FROM bills WHERE status = 'held'`
+    );
+
+    res.sendSuccess({
+      count: heldBills.length,
+      total_held: countResult.count,
+      bills: heldBills
+    });
+  } catch (error) {
+    res.sendError('Failed to fetch held bills', 500, error.message);
   }
 });
 
@@ -281,10 +314,10 @@ router.post('/:id/print', async (req, res) => {
       // Continue even if printer fails - bill is still created
     }
 
-    // Update bill status
+    // Update bill updated_at timestamp
     await db.run(
-      'UPDATE bills SET status = ?, printed_at = ?, updated_at = ? WHERE id = ?',
-      ['printed', new Date().toISOString(), new Date().toISOString(), id]
+      'UPDATE bills SET updated_at = ? WHERE id = ?',
+      [new Date().toISOString(), id]
     );
 
     res.sendSuccess({
@@ -297,36 +330,133 @@ router.post('/:id/print', async (req, res) => {
 });
 
 /**
- * POST /api/bills/:id/cancel
- * Cancel a bill
- * Body: { reason (optional) }
+ * POST /api/bills/:id/hold
+ * Hold/pause a bill
+ * Body: { reason, notes (optional) }
  */
-router.post('/:id/cancel', async (req, res) => {
+router.post('/:id/hold', async (req, res) => {
   try {
     const db = await getDatabase();
     const { id } = req.params;
-    const { reason } = req.body;
+    const { reason, notes } = req.body;
+
+    if (!reason) {
+      return res.sendError('Hold reason is required', 400);
+    }
 
     const bill = await db.get('SELECT * FROM bills WHERE id = ?', [id]);
     if (!bill) {
       return res.sendError('Bill not found', 404);
     }
 
-    if (bill.status === 'cancelled') {
-      return res.sendError('Bill is already cancelled', 400);
-    }
+    // Create hold record
+    const holdId = uuidv4();
+    const now = new Date().toISOString();
 
     await db.run(
-      'UPDATE bills SET status = ?, notes = ?, cancelled_at = ?, updated_at = ? WHERE id = ?',
-      ['cancelled', reason || null, new Date().toISOString(), new Date().toISOString(), id]
+      `INSERT INTO bill_holds (id, bill_id, reason, held_at, notes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [holdId, id, reason, now, notes || null, now, now]
+    );
+
+    // Update bill status to held
+    await db.run(
+      'UPDATE bills SET status = ?, updated_at = ? WHERE id = ?',
+      ['held', now, id]
     );
 
     res.sendSuccess({
       bill_id: id,
-      message: 'Bill cancelled successfully'
+      hold_id: holdId,
+      message: 'Bill held successfully'
+    }, 201);
+  } catch (error) {
+    res.sendError('Failed to hold bill', 500, error.message);
+  }
+});
+
+/**
+ * POST /api/bills/:id/resume
+ * Resume a held bill
+ */
+router.post('/:id/resume', async (req, res) => {
+  try {
+    const db = await getDatabase();
+    const { id } = req.params;
+
+    const bill = await db.get('SELECT * FROM bills WHERE id = ?', [id]);
+    if (!bill) {
+      return res.sendError('Bill not found', 404);
+    }
+
+    if (bill.status !== 'held') {
+      return res.sendError('Bill is not on hold', 400);
+    }
+
+    // Get the current hold
+    const hold = await db.get(
+      `SELECT * FROM bill_holds WHERE bill_id = ? AND resumed_at IS NULL ORDER BY held_at DESC LIMIT 1`,
+      [id]
+    );
+
+    if (!hold) {
+      return res.sendError('No active hold found for this bill', 400);
+    }
+
+    const now = new Date().toISOString();
+
+    // Update hold to mark as resumed
+    await db.run(
+      'UPDATE bill_holds SET resumed_at = ?, updated_at = ? WHERE id = ?',
+      [now, now, hold.id]
+    );
+
+    // Update bill status back to paid
+    await db.run(
+      'UPDATE bills SET status = ?, updated_at = ? WHERE id = ?',
+      ['paid', now, id]
+    );
+
+    res.sendSuccess({
+      bill_id: id,
+      hold_id: hold.id,
+      message: 'Bill resumed successfully'
     });
   } catch (error) {
-    res.sendError('Failed to cancel bill', 500, error.message);
+    res.sendError('Failed to resume bill', 500, error.message);
+  }
+});
+
+/**
+/**
+/**
+ * GET /api/bills/:id/holds
+ * Get hold history for a bill
+ */
+router.get('/:id/holds', async (req, res) => {
+  try {
+    const db = await getDatabase();
+    const { id } = req.params;
+
+    const bill = await db.get('SELECT * FROM bills WHERE id = ?', [id]);
+    if (!bill) {
+      return res.sendError('Bill not found', 404);
+    }
+
+    const holds = await db.all(
+      `SELECT * FROM bill_holds WHERE bill_id = ? ORDER BY held_at DESC`,
+      [id]
+    );
+
+    res.sendSuccess({
+      bill_id: id,
+      bill_number: bill.bill_number,
+      current_status: bill.status,
+      holds: holds,
+      total_holds: holds.length
+    });
+  } catch (error) {
+    res.sendError('Failed to fetch bill holds', 500, error.message);
   }
 });
 

@@ -1,5 +1,4 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
 
@@ -8,16 +7,39 @@ import { dirname } from 'path';
  * Run: npm run menu:refresh
  */
 export async function refreshMenu(dbPath = './data/pos.db') {
-  let db = null;
+  let database = null;
   try {
     console.log('🔄 Refreshing menu items...');
 
-    // Create fresh connection (not using singleton)
+    // Create data directory if it doesn't exist
     mkdirSync(dirname(dbPath), { recursive: true });
-    db = await open({
-      filename: dbPath,
-      driver: sqlite3.Database
-    });
+
+    // Create a direct database connection (not using the singleton)
+    database = new Database(dbPath);
+    database.pragma('foreign_keys = ON');
+
+    // Wrap in async-like interface
+    const db = {
+      database,
+      async run(sql, params = []) {
+        const stmt = database.prepare(sql);
+        const result = stmt.run(...params);
+        return { changes: result.changes };
+      },
+      async get(sql, params = []) {
+        const stmt = database.prepare(sql);
+        return stmt.get(...params) || null;
+      },
+      async all(sql, params = []) {
+        const stmt = database.prepare(sql);
+        return stmt.all(...params);
+      },
+      async close() {
+        if (database) {
+          database.close();
+        }
+      }
+    };
 
     // Clear existing products
     await db.run('DELETE FROM products');
@@ -96,8 +118,8 @@ export async function refreshMenu(dbPath = './data/pos.db') {
     console.error('❌ Failed to refresh menu:', error);
     throw error;
   } finally {
-    if (db) {
-      await db.close();
+    if (database) {
+      database.close();
     }
   }
 }

@@ -1,0 +1,24 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#DC2626" opacity="0.1"/>
+
+  <!-- Wing shape (left) -->
+  <path d="M 60 80 Q 50 60 45 50 Q 40 40 50 35 Q 70 30 85 50 Q 90 65 85 80 Z" fill="#DC2626"/>
+
+  <!-- Wing shape (right) -->
+  <path d="M 140 80 Q 150 60 155 50 Q 160 40 150 35 Q 130 30 115 50 Q 110 65 115 80 Z" fill="#DC2626"/>
+
+  <!-- Center drumstick -->
+  <g>
+    <!-- Meat part -->
+    <ellipse cx="100" cy="90" rx="20" ry="35" fill="#EF4444"/>
+    <!-- Bone part -->
+    <rect x="95" y="125" width="10" height="40" fill="#D4A574" rx="5"/>
+    <!-- Joint -->
+    <circle cx="100" cy="125" r="8" fill="#C19A6B"/>
+  </g>
+
+  <!-- Shine/highlight on wings -->
+  <ellipse cx="55" cy="55" rx="8" ry="12" fill="#FCA5A5" opacity="0.6"/>
+  <ellipse cx="145" cy="55" rx="8" ry="12" fill="#FCA5A5" opacity="0.6"/>
+</svg>

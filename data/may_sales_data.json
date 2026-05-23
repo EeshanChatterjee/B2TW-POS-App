@@ -1,0 +1,237 @@
+{
+  "source": "Blue Ridge WhatsApp Group - Sales Logs (May 2026)",
+  "extracted_date": "2026-05-22",
+  "note": "Manually extracted from handwritten sales ledger images. Represents daily sales summaries for May 1-22, 2026.",
+  "daily_sales": [
+    {
+      "date": "2026-05-01",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "No sales log images found for this date"
+    },
+    {
+      "date": "2026-05-02",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "No sales log images found for this date"
+    },
+    {
+      "date": "2026-05-03",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Images available but no clear sales log visible"
+    },
+    {
+      "date": "2026-05-04",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-05",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-06",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-07",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-08",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-09",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-10",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-11",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-12",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-13",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-14",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-15",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-16",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-17",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-18",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Awaiting image review"
+    },
+    {
+      "date": "2026-05-19",
+      "total_sales": 3400,
+      "payment_methods": {
+        "cash": 2300,
+        "upi": 2930,
+        "card": 320
+      },
+      "cash_box_balance": 1236,
+      "notes": "Extracted from handwritten sales log images (msg_117, msg_118). Multiple pages showing menu items: Biracas, Pepper Wedges, Cheese Wings, Sabe Bao, Coke, Cold drinks, Water, Chicken, Thum sup, Jeera Masaley, etc."
+    },
+    {
+      "date": "2026-05-20",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "No images extracted yet - need to pull from WhatsApp group"
+    },
+    {
+      "date": "2026-05-21",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "No images extracted yet - need to pull from WhatsApp group"
+    },
+    {
+      "date": "2026-05-22",
+      "total_sales": 0,
+      "payment_methods": {
+        "cash": 0,
+        "upi": 0,
+        "card": 0
+      },
+      "notes": "Today's sales - no images extracted yet"
+    }
+  ],
+  "summary": {
+    "days_with_data": 1,
+    "total_all_sales": 3400,
+    "total_cash": 2300,
+    "total_upi": 2930,
+    "total_card": 320,
+    "missing_dates": 21,
+    "notes": "Only May 19 has complete extracted data. Remaining dates (May 1-18, 20-22) need image review and manual extraction, or fresh extraction from WhatsApp group for May 20-22."
+  }
+}

@@ -1,5 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import { getDatabase } from '../db/connection.js';
 
 const router = express.Router();
@@ -24,7 +25,7 @@ router.post('/login', async (req, res) => {
 
     // Find user by username
     const user = await db.get(
-      'SELECT id, username, password_hash, role, is_active FROM admin_users WHERE username = ?',
+      'SELECT id, username, password_hash, role, is_active FROM staff_users WHERE username = ?',
       [username]
     );
 
@@ -37,9 +38,9 @@ router.post('/login', async (req, res) => {
       return res.sendError('User account is inactive', 403);
     }
 
-    // TODO: In production, use bcrypt to hash and compare passwords
-    // For now, simple string comparison (not secure!)
-    if (user.password_hash !== password) {
+    // Verify password using bcrypt
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    if (!isPasswordValid) {
       return res.sendError('Invalid username or password', 401);
     }
 

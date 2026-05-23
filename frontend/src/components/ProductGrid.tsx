@@ -8,14 +8,22 @@ interface Product {
   name: string;
   category: string;
   price: number;
+  position: number;
+  veg_type: 'veg' | 'non_veg' | 'not_applicable';
   description: string;
   is_active: number;
+}
+
+interface CategoryDetail {
+  id: string;
+  name: string;
+  position: number;
 }
 
 export default function ProductGrid() {
   const dispatch = useAppDispatch();
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<CategoryDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,11 +36,20 @@ export default function ProductGrid() {
 
         // Fetch products
         const productsResponse = await api.getProducts();
+        console.log('Products Response:', productsResponse);
         setProducts(productsResponse.data.products);
 
-        // Fetch categories
+        // Fetch categories with position information
         const categoriesResponse = await api.getCategories();
-        setCategories(categoriesResponse.data.categories);
+        console.log('Categories Response:', categoriesResponse);
+        console.log('CategoryDetails raw:', categoriesResponse.data.categoryDetails);
+
+        // Use categoryDetails array which has position info, sorted by position
+        const sortedCategories = (categoriesResponse.data.categoryDetails || []).sort(
+          (a: CategoryDetail, b: CategoryDetail) => a.position - b.position
+        );
+        console.log('Sorted Categories:', sortedCategories);
+        setCategories(sortedCategories);
       } catch (err) {
         setError('Failed to load products. Please try again.');
         console.error('Error fetching products:', err);
@@ -46,7 +63,7 @@ export default function ProductGrid() {
 
   // Group products by category
   const groupedProducts = categories.reduce((acc, category) => {
-    acc[category] = products.filter(p => p.category === category);
+    acc[category.name] = products.filter(p => p.category === category.name);
     return acc;
   }, {} as Record<string, Product[]>);
 
@@ -61,35 +78,23 @@ export default function ProductGrid() {
   };
 
   const getProductColor = (product: Product) => {
-    // Beverages - light blue
-    if (product.category === 'Beverages') {
-      return 'bg-blue-100 hover:bg-blue-200';
+    // Use veg_type field for color coding
+    switch (product.veg_type) {
+      case 'veg':
+        return 'bg-green-100 hover:bg-green-200';
+      case 'non_veg':
+        return 'bg-red-100 hover:bg-red-200';
+      case 'not_applicable':
+      default:
+        // Beverages and desserts - light blue
+        if (product.category === 'Beverages') {
+          return 'bg-blue-100 hover:bg-blue-200';
+        }
+        if (product.category === 'Dessert Bao') {
+          return 'bg-orange-100 hover:bg-orange-200';
+        }
+        return 'bg-gray-100 hover:bg-gray-200';
     }
-
-    // Desserts - light orange
-    if (product.category === 'Dessert Bao') {
-      return 'bg-orange-100 hover:bg-orange-200';
-    }
-
-    // Determine veg vs non-veg from product name
-    const name = product.name.toLowerCase();
-
-    // Non-veg items take priority - explicitly labeled as "Non Veg"
-    if (name.includes('non veg')) {
-      return 'bg-orange-200 hover:bg-orange-300';
-    }
-
-    // Veg items - explicitly labeled as "Veg" or contain veg keywords
-    const vegKeywords = ['veg', 'paneer', 'soya', 'sabz', 'corn', 'spring roll', 'potato', 'crispy', 'pizza'];
-    const isVeg = vegKeywords.some(keyword => name.includes(keyword));
-
-    // Veg items - light green
-    if (isVeg) {
-      return 'bg-green-100 hover:bg-green-200';
-    }
-
-    // Non-veg items - darker orange
-    return 'bg-orange-200 hover:bg-orange-300';
   };
 
   if (loading) {
@@ -119,14 +124,14 @@ export default function ProductGrid() {
       ) : (
         <div className="space-y-6">
           {categories.map((category, categoryIndex) => {
-            const categoryProducts = groupedProducts[category];
+            const categoryProducts = groupedProducts[category.name];
             if (categoryProducts.length === 0) return null;
 
             return (
-              <div key={category}>
+              <div key={category.id}>
                 {/* Category Header with separator */}
                 <div className="flex items-center gap-4 mb-4">
-                  <h2 className="text-lg font-bold text-gray-800 whitespace-nowrap w-32">{category}</h2>
+                  <h2 className="text-lg font-bold text-gray-800 whitespace-nowrap w-32">{category.name}</h2>
                   <div className="flex-1 h-px bg-gray-300"></div>
                 </div>
 

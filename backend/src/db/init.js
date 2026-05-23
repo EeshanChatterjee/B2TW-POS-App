@@ -1,8 +1,9 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import Database from 'better-sqlite3';
+import { readFileSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, '..');
@@ -10,51 +11,114 @@ const __dirname = join(__filename, '..');
 /**
  * Initialize SQLite database with schema
  * Runs schema.sql and seeds default data
+ * Uses a separate database connection (not the singleton)
  */
 export async function initializeDatabase(dbPath = './data/pos.db') {
+  let database = null;
   try {
     console.log('📦 Initializing database...');
 
-    const db = await open({
-      filename: dbPath,
-      driver: sqlite3.Database
-    });
+    // Create data directory if it doesn't exist
+    mkdirSync(dirname(dbPath), { recursive: true });
+
+    // Create a direct database connection (not using the singleton from getDatabase)
+    database = new Database(dbPath);
+    database.pragma('foreign_keys = ON');
+
+    // Wrap in async-like interface for compatibility with rest of the code
+    const db = {
+      database,
+      async exec(sql) {
+        database.exec(sql);
+      },
+      async run(sql, params = []) {
+        const stmt = database.prepare(sql);
+        const result = stmt.run(...params);
+        return { changes: result.changes };
+      },
+      async get(sql, params = []) {
+        const stmt = database.prepare(sql);
+        return stmt.get(...params) || null;
+      },
+      async all(sql, params = []) {
+        const stmt = database.prepare(sql);
+        return stmt.all(...params);
+      }
+    };
 
     // Read and execute schema
     const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf-8');
     await db.exec(schema);
     console.log('✅ Database schema created');
 
-    // Seed default admin user (username: admin, password: admin123)
+    // Seed default data
     await seedDefaultData(db);
 
-    await db.close();
     console.log('✅ Database initialized successfully at:', dbPath);
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
     throw error;
+  } finally {
+    if (database) {
+      database.close();
+    }
   }
 }
 
 /**
- * Seed default data (admin user, sample products)
+ * Seed default data (staff users, sample products)
  */
 async function seedDefaultData(db) {
   try {
-    // Check if admin user exists
-    const adminExists = await db.get(
-      'SELECT COUNT(*) as count FROM admin_users'
+    // Check if staff users exist
+    const staffExists = await db.get(
+      'SELECT COUNT(*) as count FROM staff_users'
     );
 
-    if (adminExists.count === 0) {
-      // Default admin user (password: admin123)
-      // In production, use proper password hashing (bcrypt)
-      await db.run(
-        `INSERT INTO admin_users (id, username, password_hash, role, is_active)
-         VALUES (?, ?, ?, ?, ?)`,
-        ['admin-001', 'admin', 'admin123', 'admin', 1]
-      );
-      console.log('✅ Default admin user created (username: admin, password: admin123)');
+    if (staffExists.count === 0) {
+      // Hash password for all demo users (password: password)
+      const hashedPassword = await bcrypt.hash('password', 10);
+
+      // Create demo staff users
+      const demoUsers = [
+        { username: 'admin', full_name: 'Admin User', email: 'admin@b2tw.com', role: 'admin' },
+        { username: 'manager', full_name: 'Manager User', email: 'manager@b2tw.com', role: 'manager' },
+        { username: 'operator', full_name: 'Operator User', email: 'operator@b2tw.com', role: 'operator' }
+      ];
+
+      for (const user of demoUsers) {
+        await db.run(
+          `INSERT INTO staff_users (id, username, password_hash, full_name, email, role, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [uuidv4(), user.username, hashedPassword, user.full_name, user.email, user.role, 1]
+        );
+      }
+      console.log('✅ Demo staff users created (admin, manager, operator with password: password)');
+    }
+
+    // Check if categories exist
+    const categoriesExist = await db.get(
+      'SELECT COUNT(*) as count FROM categories'
+    );
+
+    if (categoriesExist.count === 0) {
+      // Category order for the menu
+      const categoryOrder = [
+        'Bao',
+        'Korean Ramen',
+        'Chicken Wings',
+        'Lite Bites',
+        'Dessert Bao',
+        'Beverages'
+      ];
+
+      for (let index = 0; index < categoryOrder.length; index++) {
+        await db.run(
+          `INSERT INTO categories (id, name, position) VALUES (?, ?, ?)`,
+          [uuidv4(), categoryOrder[index], index]
+        );
+      }
+      console.log('✅ Categories created with custom order');
     }
 
     // Check if products exist
@@ -122,11 +186,33 @@ async function seedDefaultData(db) {
         { id: 'prod-031', name: 'Peach Boba', category: 'Dessert Bao', price: 142.86, is_beverage: 0 },
       ];
 
-      for (const product of sampleProducts) {
+      // Helper function to classify veg type based on product name
+      const classifyVegType = (name) => {
+        const lowerName = name.toLowerCase();
+
+        // Non-veg indicators
+        const nonVegKeywords = ['chicken', 'non veg'];
+        if (nonVegKeywords.some(keyword => lowerName.includes(keyword))) {
+          return 'non_veg';
+        }
+
+        // Veg indicators
+        const vegKeywords = ['paneer', 'soya', 'veg', 'sabz', 'corn', 'spring roll', 'potato', 'crispy'];
+        if (vegKeywords.some(keyword => lowerName.includes(keyword))) {
+          return 'veg';
+        }
+
+        // Beverages and desserts - not applicable
+        return 'not_applicable';
+      };
+
+      for (let index = 0; index < sampleProducts.length; index++) {
+        const product = sampleProducts[index];
+        const vegType = classifyVegType(product.name);
         await db.run(
-          `INSERT INTO products (id, name, category, price, is_beverage, is_active)
-           VALUES (?, ?, ?, ?, ?, 1)`,
-          [product.id, product.name, product.category, product.price, product.is_beverage]
+          `INSERT INTO products (id, name, category, price, is_beverage, is_active, position, veg_type)
+           VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+          [product.id, product.name, product.category, product.price, product.is_beverage, index, vegType]
         );
       }
       console.log('✅ Menu items seeded (43 products from Bao to the Wings menu)');

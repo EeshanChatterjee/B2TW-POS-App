@@ -19,7 +19,6 @@ export default function TellerScreen() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
-  const [showNavBar, setShowNavBar] = useState(true);
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
@@ -212,45 +211,31 @@ export default function TellerScreen() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 relative">
-      {/* Toggle Nav Bar Button */}
-      <button
-        onClick={() => setShowNavBar(!showNavBar)}
-        className="absolute top-2 left-2 z-50 bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors"
-        title={showNavBar ? 'Hide navigation' : 'Show navigation'}
-      >
-        {showNavBar ? '▼' : '▲'}
-      </button>
-
       {/* Header */}
-      {showNavBar && (
-        <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-4 shadow-lg">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <img src="/logo.png" alt="Bao to the Wings" className="h-16 w-auto" />
-              <div>
-                <h1 className="text-3xl font-bold">Bao to the Wings</h1>
-                <p className="text-red-100 text-sm">Fast & Delicious QSR Service</p>
-              </div>
-            </div>
-            <div className="text-right text-sm">
-              <p className="text-red-100">
-                {new Date().toLocaleDateString('en-IN', {
-                  weekday: 'short',
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric'
-                })}
-              </p>
-              <p className="text-red-100">
-                {new Date().toLocaleTimeString('en-IN', {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </p>
-            </div>
+      <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-4 shadow-lg">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold">Teller Screen</h1>
+            <p className="text-red-100 text-sm">Take orders & manage bills</p>
+          </div>
+          <div className="text-right text-sm">
+            <p className="text-red-100">
+              {new Date().toLocaleDateString('en-IN', {
+                weekday: 'short',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+              })}
+            </p>
+            <p className="text-red-100">
+              {new Date().toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </p>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Success Message */}
       {successMessage && (
