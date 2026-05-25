@@ -16,7 +16,6 @@ dotenv.config({ path: join(__dirname, '../.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const DATABASE_URL = process.env.DATABASE_URL || './data/pos.db';
 
 // ============================================
 // Middleware
@@ -51,7 +50,7 @@ app.get('/api/health', (req, res) => {
 // Database status
 app.get('/api/db/status', async (req, res) => {
   try {
-    const db = await getDatabase(DATABASE_URL);
+    const db = await getDatabase();
     const result = await db.all('SELECT COUNT(*) as count FROM products');
     res.sendSuccess({
       database: 'connected',
@@ -99,15 +98,20 @@ async function startServer() {
   try {
     console.log('🚀 Starting Bao to the Wings POS Server...');
 
+    // Check if DATABASE_URL is set
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL environment variable is not set');
+    }
+
     // Initialize database if needed
     try {
-      await initializeDatabase(DATABASE_URL);
+      await initializeDatabase();
     } catch (error) {
       console.error('Database initialization warning:', error.message);
     }
 
     // Get database connection
-    const db = await getDatabase(DATABASE_URL);
+    const db = await getDatabase();
     console.log('✅ Database connected');
 
     // Attach database to app for use in routes
@@ -121,7 +125,7 @@ async function startServer() {
 ║   Server Running                       ║
 ╠════════════════════════════════════════╣
 ║ 📍 URL:  http://localhost:${PORT}              ║
-║ 🗄️  DB:   ${DATABASE_URL}              ║
+║ 🗄️  DB:   PostgreSQL (Render)         ║
 ║ 📝 API:  /api/*                       ║
 ║ ⚕️  Health: /api/health                ║
 ╚════════════════════════════════════════╝

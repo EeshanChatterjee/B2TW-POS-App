@@ -25,7 +25,7 @@ router.post('/login', async (req, res) => {
 
     // Find user by username
     const user = await db.get(
-      'SELECT id, username, password_hash, role, is_active FROM staff_users WHERE username = ?',
+      'SELECT id, username, password_hash, role, is_active FROM staff_users WHERE username = $1',
       [username]
     );
 

@@ -34,7 +34,7 @@ router.get('/sales', async (req, res) => {
         AVG(total_amount) as avg_order_value,
         payment_method
       FROM orders
-      WHERE DATE(created_at) BETWEEN ? AND ?
+      WHERE DATE(created_at) BETWEEN $1 AND $2
       GROUP BY DATE(created_at), payment_method
       ORDER BY date DESC`,
       [startDate, endDate]
@@ -60,7 +60,7 @@ router.get('/sales', async (req, res) => {
     // Calculate averages and add price breakdowns
     Object.keys(salesByDate).forEach(date => {
       const data = salesByDate[date];
-      data.average_price = data.orders > 0 ? roundCurrency(data.total_price / data.orders) : 0;
+      data.average_price = data.orders > 0 $1 roundCurrency(data.total_price / data.orders) : 0;
 
       // Calculate base price and GST on-the-fly
       const totalBreakdown = getPriceBreakdown(data.total_price);
@@ -122,13 +122,13 @@ router.get('/top-products', async (req, res) => {
     const params = [];
 
     if (startDate && endDate) {
-      query += ` WHERE DATE(o.created_at) BETWEEN ? AND ?`;
+      query += ` WHERE DATE(o.created_at) BETWEEN $1 AND $2`;
       params.push(startDate, endDate);
     }
 
     query += ` GROUP BY p.id, p.name, p.category
       ORDER BY total_revenue DESC
-      LIMIT ?`;
+      LIMIT $1`;
     params.push(parseInt(limit));
 
     const topProducts = await db.all(query, params);
@@ -182,7 +182,7 @@ router.get('/customers', async (req, res) => {
     const params = [];
 
     if (startDate && endDate) {
-      dateFilter = 'WHERE DATE(o.created_at) BETWEEN ? AND ?';
+      dateFilter = 'WHERE DATE(o.created_at) BETWEEN $1 AND $2';
       params.push(startDate, endDate);
     }
 
@@ -209,9 +209,9 @@ router.get('/customers', async (req, res) => {
     const metrics = await db.get(
       `SELECT
         COUNT(DISTINCT c.id) as total_customers,
-        COUNT(DISTINCT CASE WHEN DATE(o.created_at) BETWEEN ? AND ? THEN c.id END) as active_customers,
+        COUNT(DISTINCT CASE WHEN DATE(o.created_at) BETWEEN $1 AND $2 THEN c.id END) as active_customers,
         COUNT(DISTINCT CASE WHEN (SELECT COUNT(*) FROM orders o2 WHERE o2.customer_id = c.id) = 1 THEN c.id END) as new_customers,
-        AVG(CASE WHEN DATE(o.created_at) BETWEEN ? AND ? THEN o.total_amount END) as avg_customer_spend
+        AVG(CASE WHEN DATE(o.created_at) BETWEEN $1 AND $2 THEN o.total_amount END) as avg_customer_spend
       FROM customers c
       LEFT JOIN orders o ON c.id = o.customer_id`,
       [startDate, endDate, startDate, endDate]
@@ -263,7 +263,7 @@ router.get('/revenue', async (req, res) => {
         COUNT(*) as order_count,
         COALESCE(SUM(total_amount), 0) as total_amount
       FROM orders
-      WHERE DATE(created_at) BETWEEN ? AND ?
+      WHERE DATE(created_at) BETWEEN $1 AND $2
       GROUP BY period, payment_method
       ORDER BY period DESC`,
       [startDate, endDate]
@@ -324,7 +324,7 @@ router.get('/dashboard', async (req, res) => {
         COALESCE(SUM(total_amount), 0) as total_sales,
         COALESCE(AVG(total_amount), 0) as avg_order_value
       FROM orders
-      WHERE DATE(created_at) = ?`,
+      WHERE DATE(created_at) = $1`,
       [today]
     );
 
@@ -334,7 +334,7 @@ router.get('/dashboard', async (req, res) => {
         COUNT(*) as order_count,
         COALESCE(SUM(total_amount), 0) as total_sales
       FROM orders
-      WHERE DATE(created_at) BETWEEN ? AND ?`,
+      WHERE DATE(created_at) BETWEEN $1 AND $2`,
       [monthStart, today]
     );
 
@@ -347,7 +347,7 @@ router.get('/dashboard', async (req, res) => {
       FROM order_items oi
       JOIN products p ON oi.product_id = p.id
       JOIN orders o ON oi.order_id = o.id
-      WHERE DATE(o.created_at) = ?
+      WHERE DATE(o.created_at) = $1
       GROUP BY p.id
       ORDER BY revenue DESC
       LIMIT 1`,
@@ -358,7 +358,7 @@ router.get('/dashboard', async (req, res) => {
     const totalCustomersToday = await db.get(
       `SELECT COUNT(DISTINCT customer_id) as count
        FROM orders
-       WHERE DATE(created_at) = ? AND customer_id IS NOT NULL AND customer_id != ''`,
+       WHERE DATE(created_at) = $1 AND customer_id IS NOT NULL AND customer_id != ''`,
       [today]
     );
 
@@ -403,7 +403,7 @@ router.get('/dashboard', async (req, res) => {
         base_price: monthBreakdown.base_price,
         gst_amount: monthBreakdown.gst_amount
       },
-      topProduct: topProductToday ? {
+      topProduct: topProductToday $1 {
         name: topProductToday.name,
         quantity: topProductToday.quantity,
         total_price: productRevenue,
@@ -439,7 +439,7 @@ router.get('/comparison/today-vs-lastweek', async (req, res) => {
         COALESCE(SUM(total_amount), 0) as total_sales,
         COALESCE(AVG(total_amount), 0) as avg_order
       FROM orders
-      WHERE DATE(created_at) = ?`,
+      WHERE DATE(created_at) = $1`,
       [today]
     );
 
@@ -449,7 +449,7 @@ router.get('/comparison/today-vs-lastweek', async (req, res) => {
         COALESCE(SUM(total_amount), 0) as total_sales,
         COALESCE(AVG(total_amount), 0) as avg_order
       FROM orders
-      WHERE DATE(created_at) = ?`,
+      WHERE DATE(created_at) = $1`,
       [lastWeekDate]
     );
 
@@ -483,8 +483,8 @@ router.get('/comparison/today-vs-lastweek', async (req, res) => {
     };
 
     const growth = {
-      orders_pct: lastWeek.orders > 0 ? ((current.orders - lastWeek.orders) / lastWeek.orders * 100).toFixed(2) : 0,
-      sales_pct: lastWeek.total_sales > 0 ? ((current.total_sales - lastWeek.total_sales) / lastWeek.total_sales * 100).toFixed(2) : 0
+      orders_pct: lastWeek.orders > 0 $1 ((current.orders - lastWeek.orders) / lastWeek.orders * 100).toFixed(2) : 0,
+      sales_pct: lastWeek.total_sales > 0 $1 ((current.total_sales - lastWeek.total_sales) / lastWeek.total_sales * 100).toFixed(2) : 0
     };
 
     res.sendSuccess({
@@ -527,7 +527,7 @@ router.get('/comparison/day-of-week', async (req, res) => {
         SUM(total_amount) as total_sales,
         AVG(total_amount) as avg_order
       FROM orders
-      WHERE DATE(created_at) BETWEEN ? AND ?
+      WHERE DATE(created_at) BETWEEN $1 AND $2
       GROUP BY strftime('%w', created_at)
       ORDER BY CAST(strftime('%w', created_at) AS INTEGER)`,
       [startDate, endDate]
@@ -584,7 +584,7 @@ router.get('/comparison/month-over-month', async (req, res) => {
         AVG(total_amount) as avg_order,
         COUNT(DISTINCT customer_id) as customers
       FROM orders
-      WHERE strftime('%Y-%m', created_at) = ?`,
+      WHERE strftime('%Y-%m', created_at) = $1`,
       [targetMonth]
     );
 
@@ -595,7 +595,7 @@ router.get('/comparison/month-over-month', async (req, res) => {
         AVG(total_amount) as avg_order,
         COUNT(DISTINCT customer_id) as customers
       FROM orders
-      WHERE strftime('%Y-%m', created_at) = ?`,
+      WHERE strftime('%Y-%m', created_at) = $1`,
       [prevMonthStr]
     );
 
@@ -631,8 +631,8 @@ router.get('/comparison/month-over-month', async (req, res) => {
     };
 
     const growth = {
-      orders_pct: previous.orders > 0 ? ((current.orders - previous.orders) / previous.orders * 100).toFixed(2) : 0,
-      sales_pct: previous.total_price > 0 ? ((current.total_price - previous.total_price) / previous.total_price * 100).toFixed(2) : 0
+      orders_pct: previous.orders > 0 $1 ((current.orders - previous.orders) / previous.orders * 100).toFixed(2) : 0,
+      sales_pct: previous.total_price > 0 $1 ((current.total_price - previous.total_price) / previous.total_price * 100).toFixed(2) : 0
     };
 
     res.sendSuccess({
@@ -671,7 +671,7 @@ router.get('/category-sales', async (req, res) => {
       FROM orders o
       JOIN order_items oi ON o.id = oi.order_id
       JOIN products p ON oi.product_id = p.id
-      WHERE DATE(o.created_at) BETWEEN ? AND ?
+      WHERE DATE(o.created_at) BETWEEN $1 AND $2
       GROUP BY p.category
       ORDER BY total_sales DESC`,
       [startDate, endDate]
@@ -742,13 +742,13 @@ router.get('/inventory', async (req, res) => {
         END as stock_status
       FROM products p
       LEFT JOIN inventory i ON p.id = i.product_id
-      WHERE p.is_active = 1
+      WHERE p.is_active = true
     `;
 
     const params = [];
 
     if (category) {
-      query += ` AND p.category = ?`;
+      query += ` AND p.category = $1`;
       params.push(category);
     }
 
@@ -786,7 +786,7 @@ router.get('/inventory/summary', async (req, res) => {
         COUNT(CASE WHEN COALESCE(i.current_stock, 0) >= i.max_stock THEN 1 END) as overstock_items
       FROM products p
       LEFT JOIN inventory i ON p.id = i.product_id
-      WHERE p.is_active = 1`
+      WHERE p.is_active = true`
     );
 
     res.sendSuccess(summary || {});
@@ -822,7 +822,7 @@ router.get('/accounting', async (req, res) => {
         COUNT(DISTINCT o.customer_id) as unique_customers,
         (SUM(o.total_amount) / COUNT(DISTINCT o.id)) as avg_transaction
       FROM orders o
-      WHERE DATE(o.created_at) BETWEEN ? AND ?`,
+      WHERE DATE(o.created_at) BETWEEN $1 AND $2`,
       [startDate, endDate]
     );
 
