@@ -47,3 +47,27 @@ When calculating invoice items:
 - Reports tab showing ₹0 → Fixed by changing field names from `total_sales` to `total_price`
 - "Dashboard" tab label → Changed to "Overview"
 - Invoice generation → Uses correct pricing calculation
+
+---
+
+## Backfill Logic Constraints ⚠️ MANDATORY
+
+### Customer ID Format (NO NULLS ALLOWED)
+**Format:** `CUSTYYYYMMDDXXX`
+- `YYYY` = year, `MM` = month, `DD` = day, `XXX` = sequential per day (001, 002...)
+- Example: `CUST20260523001`, `CUST20260523002`
+- **NEVER pass NULL for customer_id in orders table**
+- Used in: `backfill-invoices-may.py` and any future data generation scripts
+
+### Backfill Script Rules
+- Always generate customer IDs in the required format
+- Always calculate GST: `unit_price = menu_price / 1.05`
+- Always create associated bills after orders
+- Set order status to 'completed' for backfilled invoices
+- See `BACKFILL_LOGIC.md` for complete documentation
+
+### Dashboard & Reports Verification
+After running backfill scripts:
+1. Verify no NULL customer_ids: `SELECT COUNT(*) FROM orders WHERE customer_id IS NULL`
+2. Check dashboard shows correct customer count for the date
+3. Verify Sales Report displays correct totals and GST breakdown

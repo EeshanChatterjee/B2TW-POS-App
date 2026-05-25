@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '@/services/api'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import TransactionsTable from './TransactionsTable'
 
 interface DashboardMetrics {
@@ -26,7 +27,7 @@ interface DashboardMetrics {
     gst_amount?: number
   }
   customers: {
-    total_customers: number
+    total_customers_today: number
     new_customers_today: number
   }
 }
@@ -35,9 +36,11 @@ export default function DashboardOverview() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [last30DaysData, setLast30DaysData] = useState<any[]>([])
 
   useEffect(() => {
     fetchMetrics()
+    fetchLast30DaysSales()
   }, [])
 
   const fetchMetrics = async () => {
@@ -53,6 +56,21 @@ export default function DashboardOverview() {
       console.error('Dashboard error:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchLast30DaysSales = async () => {
+    try {
+      const today = new Date()
+      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+      const startDate = thirtyDaysAgo.toISOString().split('T')[0]
+      const endDate = today.toISOString().split('T')[0]
+
+      const data = await api.getSalesReport(startDate, endDate)
+      setLast30DaysData(data?.data?.data || [])
+    } catch (err: any) {
+      console.error('Error fetching 30-day sales:', err)
     }
   }
 
@@ -97,7 +115,7 @@ export default function DashboardOverview() {
     },
     {
       title: 'Total Customers',
-      value: metrics.customers.total_customers || 0,
+      value: metrics.customers.total_customers_today || 0,
       subtitle: `+${metrics.customers.new_customers_today || 0} new today`,
       color: 'bg-orange-50 border-orange-200'
     }
@@ -125,29 +143,24 @@ export default function DashboardOverview() {
         ))}
       </div>
 
-      {/* Top Product Today */}
-      {metrics.topProduct?.name && (
+      {/* Last 30 Days Sales Chart */}
+      {last30DaysData.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-xl font-bold mb-4">Top Product Today</h2>
-          <div className="border-t pt-4">
-            <p className="text-lg font-semibold text-gray-900 mb-2">
-              {metrics.topProduct.name}
-            </p>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-600">Quantity:</span>
-                <p className="text-xl font-bold text-gray-900">
-                  {metrics.topProduct.quantity}
-                </p>
-              </div>
-              <div>
-                <span className="text-gray-600">Revenue:</span>
-                <p className="text-xl font-bold text-gray-900">
-                  ₹{metrics.topProduct.total_price?.toFixed(2)}
-                </p>
-              </div>
-            </div>
-          </div>
+          <h2 className="text-xl font-bold mb-4">Daily Sales - Last 30 Days</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={last30DaysData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 12 }}
+              />
+              <YAxis />
+              <Tooltip
+                formatter={(value) => `₹${Number(value).toFixed(2)}`}
+              />
+              <Bar dataKey="total_price" fill="#3B82F6" name="Sales" />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
 

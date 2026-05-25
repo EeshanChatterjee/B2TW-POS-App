@@ -75,7 +75,8 @@ router.get('/sales', async (req, res) => {
     const salesData = Object.values(salesByDate);
     const totalPrices = salesData.map(d => d.total_price);
     const totalSalesSum = sumTotalPrices(totalPrices);
-    const averageOrderValue = salesData.length > 0 ? averageTotalPrices(totalPrices) : 0;
+    const totalOrders = salesData.reduce((sum, d) => sum + d.orders, 0);
+    const averageOrderValue = totalOrders > 0 ? roundCurrency(totalSalesSum / totalOrders) : 0;
     const summaryBreakdown = getPriceBreakdown(totalSalesSum);
 
     res.sendSuccess({
@@ -86,7 +87,7 @@ router.get('/sales', async (req, res) => {
         total_price: totalSalesSum,
         base_price: summaryBreakdown.base_price,
         gst_amount: summaryBreakdown.gst_amount,
-        totalOrders: salesData.reduce((sum, d) => sum + d.orders, 0),
+        totalOrders: totalOrders,
         averageOrderValue: averageOrderValue
       }
     });
@@ -353,20 +354,27 @@ router.get('/dashboard', async (req, res) => {
       [today]
     );
 
-    // Customer count - count distinct customers from orders
-    const customerMetrics = await db.get(
-      `SELECT
-        COUNT(DISTINCT customer_id) as total_customers
-      FROM orders
-      WHERE customer_id IS NOT NULL AND customer_id != ''`
-    );
-
-    // New customers today
-    const newCustomersToday = await db.get(
+    // Total customers today - distinct customers who ordered today
+    const totalCustomersToday = await db.get(
       `SELECT COUNT(DISTINCT customer_id) as count
        FROM orders
        WHERE DATE(created_at) = ? AND customer_id IS NOT NULL AND customer_id != ''`,
       [today]
+    );
+
+    // New customers today - customers whose first order was today
+    const newCustomersToday = await db.get(
+      `SELECT COUNT(DISTINCT customer_id) as count
+       FROM orders
+       WHERE DATE(created_at) = ?
+       AND customer_id IS NOT NULL
+       AND customer_id != ''
+       AND customer_id NOT IN (
+         SELECT DISTINCT customer_id
+         FROM orders
+         WHERE DATE(created_at) < ? AND customer_id IS NOT NULL AND customer_id != ''
+       )`,
+      [today, today]
     );
 
     const todayTotal = roundCurrency(todaySales?.total_sales || 0);
@@ -403,7 +411,7 @@ router.get('/dashboard', async (req, res) => {
         gst_amount: productBreakdown.gst_amount
       } : {},
       customers: {
-        total_customers: customerMetrics?.total_customers || 0,
+        total_customers_today: totalCustomersToday?.count || 0,
         new_customers_today: newCustomersToday?.count || 0
       }
     });

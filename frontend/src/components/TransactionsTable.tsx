@@ -87,8 +87,7 @@ export default function TransactionsTable() {
     const date = new Date(dateString);
     return date.toLocaleTimeString('en-IN', {
       hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+      minute: '2-digit'
     });
   };
 
@@ -132,7 +131,6 @@ export default function TransactionsTable() {
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="px-4 py-3 text-left font-semibold text-gray-700">Time</th>
                   <th className="px-4 py-3 text-left font-semibold text-gray-700">Type</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">ID</th>
                   <th className="px-4 py-3 text-left font-semibold text-gray-700">Customer</th>
                   <th className="px-4 py-3 text-left font-semibold text-gray-700">Items</th>
                   <th className="px-4 py-3 text-right font-semibold text-gray-700">Amount</th>
@@ -153,9 +151,6 @@ export default function TransactionsTable() {
                       }`}>
                         {transaction.id.startsWith('order') ? 'Order' : 'Bill'}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-900 font-mono text-xs">
-                      {transaction.order_id?.substring(0, 8)}...
                     </td>
                     <td className="px-4 py-3 text-gray-900">
                       {transaction.customer_phone}
