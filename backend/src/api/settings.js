@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
     const params = [];
 
     if (category) {
-      query += ' AND category = ?';
+      query += ' AND category = $1';
       params.push(category);
     }
 
@@ -33,9 +33,9 @@ router.get('/', async (req, res) => {
     // Convert setting values based on type
     const processedSettings = settings.map(s => ({
       ...s,
-      value: s.setting_type === 'boolean' ? s.setting_value === '1' :
-             s.setting_type === 'number' ? parseFloat(s.setting_value) :
-             s.setting_type === 'json' ? JSON.parse(s.setting_value || '{}') :
+      value: s.setting_type === 'boolean' $1 s.setting_value === '1' :
+             s.setting_type === 'number' $1 parseFloat(s.setting_value) :
+             s.setting_type === 'json' $1 JSON.parse(s.setting_value || '{}') :
              s.setting_value
     }));
 
@@ -58,15 +58,15 @@ router.get('/categories/:category', async (req, res) => {
     const { category } = req.params;
 
     const settings = await db.all(
-      'SELECT * FROM settings WHERE category = ? ORDER BY setting_key',
+      'SELECT * FROM settings WHERE category = $1 ORDER BY setting_key',
       [category]
     );
 
     const processedSettings = settings.map(s => ({
       ...s,
-      value: s.setting_type === 'boolean' ? s.setting_value === '1' :
-             s.setting_type === 'number' ? parseFloat(s.setting_value) :
-             s.setting_type === 'json' ? JSON.parse(s.setting_value || '{}') :
+      value: s.setting_type === 'boolean' $1 s.setting_value === '1' :
+             s.setting_type === 'number' $1 parseFloat(s.setting_value) :
+             s.setting_type === 'json' $1 JSON.parse(s.setting_value || '{}') :
              s.setting_value
     }));
 
@@ -89,7 +89,7 @@ router.get('/:key', async (req, res) => {
     const { key } = req.params;
 
     const setting = await db.get(
-      'SELECT * FROM settings WHERE setting_key = ?',
+      'SELECT * FROM settings WHERE setting_key = $1',
       [key]
     );
 
@@ -99,9 +99,9 @@ router.get('/:key', async (req, res) => {
 
     const processedSetting = {
       ...setting,
-      value: setting.setting_type === 'boolean' ? setting.setting_value === '1' :
-             setting.setting_type === 'number' ? parseFloat(setting.setting_value) :
-             setting.setting_type === 'json' ? JSON.parse(setting.setting_value || '{}') :
+      value: setting.setting_type === 'boolean' $1 setting.setting_value === '1' :
+             setting.setting_type === 'number' $1 parseFloat(setting.setting_value) :
+             setting.setting_type === 'json' $1 JSON.parse(setting.setting_value || '{}') :
              setting.setting_value
     };
 
@@ -123,7 +123,7 @@ router.put('/:key', async (req, res) => {
     const { setting_value } = req.body;
 
     const setting = await db.get(
-      'SELECT * FROM settings WHERE setting_key = ?',
+      'SELECT * FROM settings WHERE setting_key = $1',
       [key]
     );
 
@@ -139,7 +139,7 @@ router.put('/:key', async (req, res) => {
       }
       finalValue = parseFloat(setting_value);
     } else if (setting.setting_type === 'boolean') {
-      finalValue = setting_value === true || setting_value === 'true' || setting_value === '1' ? '1' : '0';
+      finalValue = setting_value === true || setting_value === 'true' || setting_value === '1' $1 '1' : '0';
     } else if (setting.setting_type === 'json') {
       try {
         JSON.parse(setting_value);
@@ -150,7 +150,7 @@ router.put('/:key', async (req, res) => {
 
     const now = new Date().toISOString();
     await db.run(
-      'UPDATE settings SET setting_value = ?, updated_at = ? WHERE setting_key = ?',
+      'UPDATE settings SET setting_value = $1, updated_at = $2 WHERE setting_key = $3',
       [String(finalValue), now, key]
     );
 
@@ -215,7 +215,7 @@ router.post('/initialize', async (req, res) => {
 
     for (const setting of defaultSettings) {
       const existingSetting = await db.get(
-        'SELECT id FROM settings WHERE setting_key = ?',
+        'SELECT id FROM settings WHERE setting_key = $1',
         [setting.key]
       );
 
@@ -223,7 +223,7 @@ router.post('/initialize', async (req, res) => {
         const id = uuidv4();
         await db.run(
           `INSERT INTO settings (id, setting_key, setting_value, setting_type, category, description, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [id, setting.key, setting.value, setting.type, setting.category, setting.desc, now, now]
         );
         createdCount++;
@@ -257,11 +257,11 @@ router.get('/staff/list', async (req, res) => {
     const params = [];
 
     if (is_active !== undefined) {
-      query += ' AND is_active = ?';
-      params.push(is_active === 'true' ? 1 : 0);
+      query += ' AND is_active = $1';
+      params.push(is_active === 'true' $1 1 : 0);
     }
 
-    query += ' ORDER BY full_name LIMIT ? OFFSET ?';
+    query += ' ORDER BY full_name LIMIT $1 OFFSET $2';
     params.push(parseInt(limit), parseInt(offset));
 
     const staff = await db.all(query, params);
@@ -289,7 +289,7 @@ router.get('/staff/:id', async (req, res) => {
 
     const staff = await db.get(
       `SELECT id, username, full_name, email, role, is_active, phone, address, hire_date, last_login, created_at
-       FROM staff_users WHERE id = ?`,
+       FROM staff_users WHERE id = $1`,
       [id]
     );
 
@@ -319,7 +319,7 @@ router.post('/staff', async (req, res) => {
 
     // Check if username exists
     const existingUser = await db.get(
-      'SELECT id FROM staff_users WHERE username = ?',
+      'SELECT id FROM staff_users WHERE username = $1',
       [username]
     );
 
@@ -333,7 +333,7 @@ router.post('/staff', async (req, res) => {
 
     await db.run(
       `INSERT INTO staff_users (id, username, password_hash, full_name, email, role, phone, address, hire_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [id, username, passwordHash, full_name, email, role, phone, address, hire_date, now, now]
     );
 
@@ -361,7 +361,7 @@ router.put('/staff/:id', async (req, res) => {
     const { id } = req.params;
     const { full_name, email, role, phone, address, is_active } = req.body;
 
-    const staff = await db.get('SELECT id FROM staff_users WHERE id = ?', [id]);
+    const staff = await db.get('SELECT id FROM staff_users WHERE id = $1', [id]);
 
     if (!staff) {
       return res.sendError('Staff member not found', 404);
@@ -372,40 +372,40 @@ router.put('/staff/:id', async (req, res) => {
     const values = [];
 
     if (full_name !== undefined) {
-      updates.push('full_name = ?');
+      updates.push('full_name = $1');
       values.push(full_name);
     }
     if (email !== undefined) {
-      updates.push('email = ?');
+      updates.push('email = $1');
       values.push(email);
     }
     if (role !== undefined) {
-      updates.push('role = ?');
+      updates.push('role = $1');
       values.push(role);
     }
     if (phone !== undefined) {
-      updates.push('phone = ?');
+      updates.push('phone = $1');
       values.push(phone);
     }
     if (address !== undefined) {
-      updates.push('address = ?');
+      updates.push('address = $1');
       values.push(address);
     }
     if (is_active !== undefined) {
-      updates.push('is_active = ?');
-      values.push(is_active ? 1 : 0);
+      updates.push('is_active = $1');
+      values.push(is_active $1 1 : 0);
     }
 
     if (updates.length === 0) {
       return res.sendError('No fields to update', 400);
     }
 
-    updates.push('updated_at = ?');
+    updates.push('updated_at = $1');
     values.push(now);
     values.push(id);
 
     await db.run(
-      `UPDATE staff_users SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE staff_users SET ${updates.join(', ')} WHERE id = $1`,
       values
     );
 
@@ -427,7 +427,7 @@ router.delete('/staff/:id', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const staff = await db.get('SELECT id FROM staff_users WHERE id = ?', [id]);
+    const staff = await db.get('SELECT id FROM staff_users WHERE id = $1', [id]);
 
     if (!staff) {
       return res.sendError('Staff member not found', 404);
@@ -435,7 +435,7 @@ router.delete('/staff/:id', async (req, res) => {
 
     const now = new Date().toISOString();
     await db.run(
-      'UPDATE staff_users SET is_active = 0, updated_at = ? WHERE id = ?',
+      'UPDATE staff_users SET is_active = false, updated_at = $1 WHERE id = $2',
       [now, id]
     );
 

@@ -14,11 +14,11 @@ router.get('/', async (req, res) => {
     const db = await getDatabase();
     const { category } = req.query;
 
-    let query = 'SELECT * FROM products WHERE is_active = 1';
+    let query = 'SELECT * FROM products WHERE is_active = true';
     const params = [];
 
     if (category) {
-      query += ' AND category = ?';
+      query += ' AND category = $' + (params.length + 1);
       params.push(category);
     }
 
@@ -45,7 +45,7 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const product = await db.get(
-      'SELECT * FROM products WHERE id = ? AND is_active = 1',
+      'SELECT * FROM products WHERE id = $1 AND is_active = true',
       [id]
     );
 
@@ -108,8 +108,8 @@ router.post('/', async (req, res) => {
 
     const result = await db.run(
       `INSERT INTO products (id, name, category, price, description, is_active, veg_type, position, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [productId, name, category, roundedPrice, description || null, is_active !== false ? 1 : 0, veg_type || 'not_applicable', position || 0, new Date().toISOString()]
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [productId, name, category, roundedPrice, description || null, is_active !== false ? true : false, veg_type || 'not_applicable', position || 0, new Date().toISOString()]
     );
 
     res.sendSuccess({
@@ -133,7 +133,7 @@ router.put('/:id', async (req, res) => {
     const { name, category, price, description, is_active, position, veg_type } = req.body;
 
     // Check if product exists
-    const product = await db.get('SELECT * FROM products WHERE id = ?', [id]);
+    const product = await db.get('SELECT * FROM products WHERE id = $1', [id]);
     if (!product) {
       return res.sendError('Product not found', 404);
     }
@@ -141,13 +141,14 @@ router.put('/:id', async (req, res) => {
     // Build update query dynamically
     const updates = [];
     const values = [];
+    let paramCount = 1;
 
     if (name !== undefined) {
-      updates.push('name = ?');
+      updates.push(`name = $${paramCount++}`);
       values.push(name);
     }
     if (category !== undefined) {
-      updates.push('category = ?');
+      updates.push(`category = $${paramCount++}`);
       values.push(category);
     }
     if (price !== undefined) {
@@ -156,23 +157,23 @@ router.put('/:id', async (req, res) => {
       }
       // Round price to 2 decimal places
       const roundedPrice = Math.round(price * 100) / 100;
-      updates.push('price = ?');
+      updates.push(`price = $${paramCount++}`);
       values.push(roundedPrice);
     }
     if (description !== undefined) {
-      updates.push('description = ?');
+      updates.push(`description = $${paramCount++}`);
       values.push(description);
     }
     if (is_active !== undefined) {
-      updates.push('is_active = ?');
-      values.push(is_active ? 1 : 0);
+      updates.push(`is_active = $${paramCount++}`);
+      values.push(is_active ? true : false);
     }
     if (position !== undefined) {
-      updates.push('position = ?');
+      updates.push(`position = $${paramCount++}`);
       values.push(position);
     }
     if (veg_type !== undefined) {
-      updates.push('veg_type = ?');
+      updates.push(`veg_type = $${paramCount++}`);
       values.push(veg_type);
     }
 
@@ -180,12 +181,12 @@ router.put('/:id', async (req, res) => {
       return res.sendError('No fields to update', 400);
     }
 
-    updates.push('updated_at = ?');
+    updates.push(`updated_at = $${paramCount++}`);
     values.push(new Date().toISOString());
     values.push(id);
 
     await db.run(
-      `UPDATE products SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE products SET ${updates.join(', ')} WHERE id = $${paramCount}`,
       values
     );
 
@@ -217,7 +218,7 @@ router.post('/batch/reorder', async (req, res) => {
       }
 
       await db.run(
-        'UPDATE products SET position = ?, updated_at = ? WHERE id = ?',
+        'UPDATE products SET position = $1, updated_at = $2 WHERE id = $3',
         [position, new Date().toISOString(), id]
       );
     }
@@ -277,7 +278,7 @@ router.put('/:id/change-category', async (req, res) => {
     }
 
     // Check if product exists
-    const product = await db.get('SELECT * FROM products WHERE id = ?', [id]);
+    const product = await db.get('SELECT * FROM products WHERE id = $1', [id]);
     if (!product) {
       return res.sendError('Product not found', 404);
     }
@@ -289,7 +290,7 @@ router.put('/:id/change-category', async (req, res) => {
 
     // Find the maximum position in the new category
     const maxPositionResult = await db.get(
-      'SELECT MAX(position) as max_position FROM products WHERE category = ? AND is_active = 1',
+      'SELECT MAX(position) as max_position FROM products WHERE category = $1 AND is_active = true',
       [category]
     );
 
@@ -297,7 +298,7 @@ router.put('/:id/change-category', async (req, res) => {
 
     // Update product with new category and position
     await db.run(
-      'UPDATE products SET category = ?, position = ?, updated_at = ? WHERE id = ?',
+      'UPDATE products SET category = $1, position = $2, updated_at = $3 WHERE id = $4',
       [category, newPosition, new Date().toISOString(), id]
     );
 
@@ -327,13 +328,13 @@ router.delete('/:id', async (req, res) => {
         return res.sendError('For null IDs, name and category query params are required', 400);
       }
 
-      const product = await db.get('SELECT * FROM products WHERE id IS NULL AND name = ? AND category = ?', [name, category]);
+      const product = await db.get('SELECT * FROM products WHERE id IS NULL AND name = $1 AND category = $2', [name, category]);
       if (!product) {
         return res.sendError('Product not found', 404);
       }
 
       await db.run(
-        'UPDATE products SET is_active = 0, updated_at = ? WHERE id IS NULL AND name = ? AND category = ?',
+        'UPDATE products SET is_active = false, updated_at = $1 WHERE id IS NULL AND name = $2 AND category = $3',
         [new Date().toISOString(), name, category]
       );
 
@@ -346,7 +347,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await db.run(
-      'UPDATE products SET is_active = 0, updated_at = ? WHERE id = ?',
+      'UPDATE products SET is_active = false, updated_at = $1 WHERE id = $2',
       [new Date().toISOString(), id]
     );
 

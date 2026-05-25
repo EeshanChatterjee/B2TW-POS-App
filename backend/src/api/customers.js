@@ -23,8 +23,8 @@ router.get('/search', async (req, res) => {
     // Search by phone (exact match or prefix) or name (contains)
     const customers = await db.all(
       `SELECT id, name, phone FROM customers
-       WHERE is_active = 1
-       AND (phone LIKE ? OR name LIKE ?)
+       WHERE is_active = true
+       AND (phone LIKE $1 OR name LIKE $2)
        ORDER BY phone`,
       [`${q}%`, `%${q}%`]
     );
@@ -48,7 +48,7 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const customer = await db.get(
-      'SELECT * FROM customers WHERE id = ? AND is_active = 1',
+      'SELECT * FROM customers WHERE id = $1 AND is_active = true',
       [id]
     );
 
@@ -72,7 +72,7 @@ router.get('/phone/:phone', async (req, res) => {
     const { phone } = req.params;
 
     const customer = await db.get(
-      'SELECT * FROM customers WHERE phone = ? AND is_active = 1',
+      'SELECT * FROM customers WHERE phone = $1 AND is_active = true',
       [phone]
     );
 
@@ -102,7 +102,7 @@ router.post('/', async (req, res) => {
 
     // Check if customer with this phone already exists
     const existing = await db.get(
-      'SELECT id FROM customers WHERE phone = ?',
+      'SELECT id FROM customers WHERE phone = $1',
       [phone]
     );
 
@@ -114,12 +114,12 @@ router.post('/', async (req, res) => {
 
     await db.run(
       `INSERT INTO customers (id, phone, name, email, is_active)
-       VALUES (?, ?, ?, ?, 1)`,
+       VALUES ($1, $2, $3, $4, 1)`,
       [customerId, phone, name || null, email || null]
     );
 
     const customer = await db.get(
-      'SELECT * FROM customers WHERE id = ?',
+      'SELECT * FROM customers WHERE id = $1',
       [customerId]
     );
 
@@ -140,7 +140,7 @@ router.put('/:id', async (req, res) => {
     const { name, email } = req.body;
 
     const customer = await db.get(
-      'SELECT * FROM customers WHERE id = ?',
+      'SELECT * FROM customers WHERE id = $1',
       [id]
     );
 
@@ -149,13 +149,13 @@ router.put('/:id', async (req, res) => {
     }
 
     await db.run(
-      `UPDATE customers SET name = ?, email = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
+      `UPDATE customers SET name = $1, email = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
       [name || customer.name, email || customer.email, id]
     );
 
     const updated = await db.get(
-      'SELECT * FROM customers WHERE id = ?',
+      'SELECT * FROM customers WHERE id = $1',
       [id]
     );
 
@@ -175,7 +175,7 @@ router.get('/:id/history', async (req, res) => {
     const { id } = req.params;
 
     const customer = await db.get(
-      'SELECT * FROM customers WHERE id = ? AND is_active = 1',
+      'SELECT * FROM customers WHERE id = $1 AND is_active = true',
       [id]
     );
 
@@ -186,7 +186,7 @@ router.get('/:id/history', async (req, res) => {
     const orders = await db.all(
       `SELECT o.id, o.total_amount, o.payment_method, o.status, o.created_at
        FROM orders o
-       WHERE o.customer_id = ?
+       WHERE o.customer_id = $1
        ORDER BY o.created_at DESC
        LIMIT 20`,
       [id]

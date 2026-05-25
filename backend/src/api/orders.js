@@ -20,7 +20,7 @@ async function generateAnonymousCustomerId(db) {
   // Count existing customers for this date
   const result = await db.get(
     `SELECT COUNT(*) as count FROM customers
-     WHERE id LIKE ? || '%'`,
+     WHERE id LIKE $1 || '%'`,
     [`CUST${dateStr}`]
   );
 
@@ -112,7 +112,7 @@ router.post('/', async (req, res) => {
       // Create customer record for this anonymous customer
       await db.run(
         `INSERT INTO customers (id, name, created_at)
-         VALUES (?, ?, ?)`,
+         VALUES ($1, $2, $3)`,
         [customer_id, 'Walk-in Customer', now]
       );
     }
@@ -120,7 +120,7 @@ router.post('/', async (req, res) => {
     // Create order record
     await db.run(
       `INSERT INTO orders (id, customer_id, payment_method, status, total_amount, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [orderId, customer_id, payment_method, 'pending', 0, now, now]
     );
 
@@ -134,7 +134,7 @@ router.post('/', async (req, res) => {
       const itemId = uuidv4();
       await db.run(
         `INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, total_price, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [itemId, orderId, item.product_id, item.quantity, item.price, itemTotal, now]
       );
     }
@@ -144,7 +144,7 @@ router.post('/', async (req, res) => {
 
     // Update order total
     await db.run(
-      'UPDATE orders SET total_amount = ?, updated_at = ? WHERE id = ?',
+      'UPDATE orders SET total_amount = $1, updated_at = $2 WHERE id = $3',
       [roundedTotal, now, orderId]
     );
 
@@ -173,7 +173,7 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const order = await db.get(
-      'SELECT * FROM orders WHERE id = ?',
+      'SELECT * FROM orders WHERE id = $1',
       [id]
     );
 
@@ -182,7 +182,7 @@ router.get('/:id', async (req, res) => {
     }
 
     const items = await db.all(
-      'SELECT * FROM order_items WHERE order_id = ?',
+      'SELECT * FROM order_items WHERE order_id = $1',
       [id]
     );
 
@@ -212,16 +212,16 @@ router.get('/', async (req, res) => {
     const params = [];
 
     if (status) {
-      query += ' AND status = ?';
+      query += ' AND status = $1';
       params.push(status);
     }
 
     if (customer_id) {
-      query += ' AND customer_id = ?';
+      query += ' AND customer_id = $1';
       params.push(customer_id);
     }
 
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY created_at DESC LIMIT $1 OFFSET $2';
     params.push(parseInt(limit), parseInt(offset));
 
     const orders = await db.all(query, params);
@@ -252,13 +252,13 @@ router.put('/:id', async (req, res) => {
       return res.sendError(`Status must be one of: ${validStatuses.join(', ')}`, 400);
     }
 
-    const order = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
+    const order = await db.get('SELECT * FROM orders WHERE id = $1', [id]);
     if (!order) {
       return res.sendError('Order not found', 404);
     }
 
     await db.run(
-      'UPDATE orders SET status = ?, updated_at = ? WHERE id = ?',
+      'UPDATE orders SET status = $1, updated_at = $2 WHERE id = $3',
       [status, new Date().toISOString(), id]
     );
 
@@ -277,13 +277,13 @@ router.post('/:id/complete', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const order = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
+    const order = await db.get('SELECT * FROM orders WHERE id = $1', [id]);
     if (!order) {
       return res.sendError('Order not found', 404);
     }
 
     await db.run(
-      'UPDATE orders SET status = ?, updated_at = ? WHERE id = ?',
+      'UPDATE orders SET status = $1, updated_at = $2 WHERE id = $3',
       ['completed', new Date().toISOString(), id]
     );
 
@@ -302,13 +302,13 @@ router.post('/:id/print-kot', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const order = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
+    const order = await db.get('SELECT * FROM orders WHERE id = $1', [id]);
     if (!order) {
       return res.sendError('Order not found', 404);
     }
 
     const items = await db.all(
-      'SELECT oi.*, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?',
+      'SELECT oi.*, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = $1',
       [id]
     );
 
@@ -327,7 +327,7 @@ router.post('/:id/print-kot', async (req, res) => {
     const now = new Date().toISOString();
     await db.run(
       `INSERT INTO kot_logs (id, order_id, status, printed_at, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5)`,
       [kotId, id, 'printed', now, now]
     );
 

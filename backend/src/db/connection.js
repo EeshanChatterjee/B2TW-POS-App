@@ -1,36 +1,43 @@
-import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
-import { dirname } from 'path';
+import pg from 'pg';
+import pool from 'pg-pool';
 
-let db = null;
+const { Pool } = pg;
+
+let dbPool = null;
 
 /**
- * Get or create database connection
- * Uses better-sqlite3 for persistent SQLite database
+ * Get or create database connection pool
+ * Uses pg for PostgreSQL connections
  */
-export async function getDatabase(dbPath = './data/pos.db') {
-  if (db) return db;
+export async function getDatabase() {
+  if (dbPool) return dbPool;
 
   try {
-    // Ensure data directory exists
-    const dataDir = dirname(dbPath);
-    mkdirSync(dataDir, { recursive: true });
+    const connectionString = process.env.DATABASE_URL;
 
-    // Open database connection (creates file if it doesn't exist)
-    const database = new Database(dbPath);
+    if (!connectionString) {
+      throw new Error('DATABASE_URL environment variable is not set');
+    }
 
-    // Enable foreign keys
-    database.pragma('foreign_keys = ON');
+    // Create connection pool
+    dbPool = new Pool({
+      connectionString,
+      max: 20, // Maximum number of clients in the pool
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
 
-    // Create a wrapper object that provides async-like interface for compatibility
-    db = {
-      database,
-      dbPath,
+    // Test the connection
+    const client = await dbPool.connect();
+    console.log('✅ Connected to PostgreSQL database');
+    client.release();
+
+    return {
+      pool: dbPool,
       async run(sql, params = []) {
         try {
-          const stmt = database.prepare(sql);
-          const result = stmt.run(...params);
-          return { changes: result.changes };
+          const result = await dbPool.query(sql, params);
+          return { changes: result.rowCount };
         } catch (error) {
           console.error('Database run error:', error);
           throw error;
@@ -38,7 +45,12 @@ export async function getDatabase(dbPath = './data/pos.db') {
       },
       async exec(sql) {
         try {
-          database.exec(sql);
+          const statements = sql.split(';').filter(stmt => stmt.trim());
+          for (const stmt of statements) {
+            if (stmt.trim()) {
+              await dbPool.query(stmt);
+            }
+          }
         } catch (error) {
           console.error('Database exec error:', error);
           throw error;
@@ -46,9 +58,8 @@ export async function getDatabase(dbPath = './data/pos.db') {
       },
       async all(sql, params = []) {
         try {
-          const stmt = database.prepare(sql);
-          const results = stmt.all(...params);
-          return results;
+          const result = await dbPool.query(sql, params);
+          return result.rows;
         } catch (error) {
           console.error('Database all error:', error);
           throw error;
@@ -56,22 +67,20 @@ export async function getDatabase(dbPath = './data/pos.db') {
       },
       async get(sql, params = []) {
         try {
-          const stmt = database.prepare(sql);
-          const result = stmt.get(...params);
-          return result || null;
+          const result = await dbPool.query(sql, params);
+          return result.rows[0] || null;
         } catch (error) {
           console.error('Database get error:', error);
           throw error;
         }
       },
       async close() {
-        if (database) {
-          database.close();
+        if (dbPool) {
+          await dbPool.end();
+          dbPool = null;
         }
       }
     };
-
-    return db;
   } catch (error) {
     console.error('Failed to connect to database:', error);
     throw error;
@@ -82,9 +91,9 @@ export async function getDatabase(dbPath = './data/pos.db') {
  * Close database connection
  */
 export async function closeDatabase() {
-  if (db) {
-    await db.close();
-    db = null;
+  if (dbPool) {
+    await dbPool.end();
+    dbPool = null;
   }
 }
 

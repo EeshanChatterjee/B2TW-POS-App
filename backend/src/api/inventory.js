@@ -25,7 +25,7 @@ router.get('/', async (req, res) => {
     const params = [];
 
     if (category) {
-      query += ' AND p.category = ?';
+      query += ' AND p.category = $1';
       params.push(category);
     }
 
@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
       query += ' AND (i.current_stock <= i.min_stock OR i.current_stock = 0)';
     }
 
-    query += ' ORDER BY p.category, p.name LIMIT ? OFFSET ?';
+    query += ' ORDER BY p.category, p.name LIMIT $1 OFFSET $2';
     params.push(parseInt(limit), parseInt(offset));
 
     const inventory = await db.all(query, params);
@@ -70,7 +70,7 @@ router.get('/:productId', async (req, res) => {
       `SELECT i.*, p.name, p.category, p.price
        FROM inventory i
        JOIN products p ON i.product_id = p.id
-       WHERE i.product_id = ?`,
+       WHERE i.product_id = $1`,
       [productId]
     );
 
@@ -80,7 +80,7 @@ router.get('/:productId', async (req, res) => {
 
     // Get recent logs
     const logs = await db.all(
-      `SELECT * FROM inventory_logs WHERE product_id = ?
+      `SELECT * FROM inventory_logs WHERE product_id = $1
        ORDER BY created_at DESC LIMIT 20`,
       [productId]
     );
@@ -115,7 +115,7 @@ router.post('/:productId/adjust', async (req, res) => {
 
     // Get current inventory
     const inventory = await db.get(
-      'SELECT * FROM inventory WHERE product_id = ?',
+      'SELECT * FROM inventory WHERE product_id = $1',
       [productId]
     );
 
@@ -133,7 +133,7 @@ router.post('/:productId/adjust', async (req, res) => {
     // Update inventory
     const now = new Date().toISOString();
     await db.run(
-      'UPDATE inventory SET current_stock = ?, updated_at = ? WHERE product_id = ?',
+      'UPDATE inventory SET current_stock = $1, updated_at = $2 WHERE product_id = $3',
       [newStock, now, productId]
     );
 
@@ -141,23 +141,23 @@ router.post('/:productId/adjust', async (req, res) => {
     const logId = uuidv4();
     await db.run(
       `INSERT INTO inventory_logs (id, product_id, transaction_type, quantity_change, previous_stock, new_stock, reason, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [logId, productId, transaction_type, quantity_change, previousStock, newStock, reason, now]
     );
 
     // Check for low stock and create alert if needed
     if (newStock <= inventory.min_stock && previousStock > inventory.min_stock) {
       const alertId = uuidv4();
-      const alertType = newStock === 0 ? 'out_of_stock' : 'low_stock';
+      const alertType = newStock === 0 $1 'out_of_stock' : 'low_stock';
       await db.run(
         `INSERT INTO inventory_alerts (id, product_id, alert_type, current_stock, threshold_level, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [alertId, productId, alertType, newStock, inventory.min_stock, 1, now, now]
       );
     } else if (newStock > inventory.min_stock) {
       // Acknowledge any active low stock alerts
       await db.run(
-        'UPDATE inventory_alerts SET is_active = 0, acknowledged_at = ? WHERE product_id = ? AND is_active = 1',
+        'UPDATE inventory_alerts SET is_active = false, acknowledged_at = $1 WHERE product_id = $2 AND is_active = true',
         [now, productId]
       );
     }
@@ -189,14 +189,14 @@ router.get('/alerts/active', async (req, res) => {
        FROM inventory_alerts ia
        JOIN products p ON ia.product_id = p.id
        JOIN inventory i ON ia.product_id = i.product_id
-       WHERE ia.is_active = 1
+       WHERE ia.is_active = true
        ORDER BY ia.created_at DESC
-       LIMIT ? OFFSET ?`,
+       LIMIT $1 OFFSET $2`,
       [parseInt(limit), parseInt(offset)]
     );
 
     const countResult = await db.get(
-      'SELECT COUNT(*) as count FROM inventory_alerts WHERE is_active = 1'
+      'SELECT COUNT(*) as count FROM inventory_alerts WHERE is_active = true'
     );
 
     res.sendSuccess({
@@ -220,7 +220,7 @@ router.post('/alerts/:alertId/acknowledge', async (req, res) => {
     const { acknowledged_by } = req.body;
 
     const alert = await db.get(
-      'SELECT * FROM inventory_alerts WHERE id = ?',
+      'SELECT * FROM inventory_alerts WHERE id = $1',
       [alertId]
     );
 
@@ -230,7 +230,7 @@ router.post('/alerts/:alertId/acknowledge', async (req, res) => {
 
     const now = new Date().toISOString();
     await db.run(
-      'UPDATE inventory_alerts SET is_active = 0, acknowledged_at = ?, acknowledged_by = ?, updated_at = ? WHERE id = ?',
+      'UPDATE inventory_alerts SET is_active = false, acknowledged_at = $1, acknowledged_by = $2, updated_at = $3 WHERE id = $4',
       [now, acknowledged_by || null, now, alertId]
     );
 
@@ -258,21 +258,21 @@ router.get('/logs/history', async (req, res) => {
       FROM inventory_logs il
       JOIN products p ON il.product_id = p.id
       LEFT JOIN admin_users au ON il.adjusted_by = au.id
-      WHERE datetime(il.created_at) >= datetime('now', '-' || ? || ' days')
+      WHERE datetime(il.created_at) >= datetime('now', '-' || $1 || ' days')
     `;
     const params = [parseInt(days)];
 
     if (product_id) {
-      query += ' AND il.product_id = ?';
+      query += ' AND il.product_id = $1';
       params.push(product_id);
     }
 
     if (transaction_type) {
-      query += ' AND il.transaction_type = ?';
+      query += ' AND il.transaction_type = $1';
       params.push(transaction_type);
     }
 
-    query += ' ORDER BY il.created_at DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY il.created_at DESC LIMIT $1 OFFSET $2';
     params.push(parseInt(limit), parseInt(offset));
 
     const logs = await db.all(query, params);
@@ -338,7 +338,7 @@ router.post('/initialize', async (req, res) => {
       const invId = uuidv4();
       await db.run(
         `INSERT INTO inventory (id, product_id, current_stock, min_stock, max_stock, reorder_level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [invId, product.id, default_stock, min_stock, max_stock, Math.ceil(min_stock * 1.5), now, now]
       );
       createdCount++;
