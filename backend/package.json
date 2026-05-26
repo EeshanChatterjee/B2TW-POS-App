@@ -27,14 +27,15 @@
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "date-fns": "^2.30.0",
-    "dotenv": "^16.3.1",
+    "dotenv": "^16.6.1",
     "escpos": "^2.4.0",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
     "lodash-es": "^4.17.21",
-    "pg": "^8.11.3",
+    "pg": "^8.21.0",
     "pg-pool": "^3.6.1",
     "serialport": "^10.4.0",
+    "sqlite3": "^6.0.1",
     "uuid": "^14.0.0"
   },
   "devDependencies": {
