@@ -24,6 +24,7 @@ const PORT = process.env.PORT || 5000;
 
 // CORS - support multiple origins (local dev and Render)
 const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim());
+console.log('✅ CORS Origins configured:', corsOrigins);
 app.use(cors({
   origin: corsOrigins,
   credentials: true
