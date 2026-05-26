@@ -148,7 +148,7 @@ router.post('/:productId/adjust', async (req, res) => {
     // Check for low stock and create alert if needed
     if (newStock <= inventory.min_stock && previousStock > inventory.min_stock) {
       const alertId = uuidv4();
-      const alertType = newStock === 0 $1 'out_of_stock' : 'low_stock';
+      const alertType = newStock === 0 ? 'out_of_stock' : 'low_stock';
       await db.run(
         `INSERT INTO inventory_alerts (id, product_id, alert_type, current_stock, threshold_level, is_active, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,

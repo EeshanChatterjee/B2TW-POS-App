@@ -33,9 +33,9 @@ router.get('/', async (req, res) => {
     // Convert setting values based on type
     const processedSettings = settings.map(s => ({
       ...s,
-      value: s.setting_type === 'boolean' $1 s.setting_value === '1' :
-             s.setting_type === 'number' $1 parseFloat(s.setting_value) :
-             s.setting_type === 'json' $1 JSON.parse(s.setting_value || '{}') :
+      value: s.setting_type === 'boolean' ? s.setting_value === '1' :
+             s.setting_type === 'number' ? parseFloat(s.setting_value) :
+             s.setting_type === 'json' ? JSON.parse(s.setting_value || '{}') :
              s.setting_value
     }));
 
@@ -64,9 +64,9 @@ router.get('/categories/:category', async (req, res) => {
 
     const processedSettings = settings.map(s => ({
       ...s,
-      value: s.setting_type === 'boolean' $1 s.setting_value === '1' :
-             s.setting_type === 'number' $1 parseFloat(s.setting_value) :
-             s.setting_type === 'json' $1 JSON.parse(s.setting_value || '{}') :
+      value: s.setting_type === 'boolean' ? s.setting_value === '1' :
+             s.setting_type === 'number' ? parseFloat(s.setting_value) :
+             s.setting_type === 'json' ? JSON.parse(s.setting_value || '{}') :
              s.setting_value
     }));
 
@@ -99,9 +99,9 @@ router.get('/:key', async (req, res) => {
 
     const processedSetting = {
       ...setting,
-      value: setting.setting_type === 'boolean' $1 setting.setting_value === '1' :
-             setting.setting_type === 'number' $1 parseFloat(setting.setting_value) :
-             setting.setting_type === 'json' $1 JSON.parse(setting.setting_value || '{}') :
+      value: setting.setting_type === 'boolean' ? setting.setting_value === '1' :
+             setting.setting_type === 'number' ? parseFloat(setting.setting_value) :
+             setting.setting_type === 'json' ? JSON.parse(setting.setting_value || '{}') :
              setting.setting_value
     };
 
@@ -139,7 +139,7 @@ router.put('/:key', async (req, res) => {
       }
       finalValue = parseFloat(setting_value);
     } else if (setting.setting_type === 'boolean') {
-      finalValue = setting_value === true || setting_value === 'true' || setting_value === '1' $1 '1' : '0';
+      finalValue = setting_value === true || setting_value === 'true' || setting_value === '1' ? '1' : '0';
     } else if (setting.setting_type === 'json') {
       try {
         JSON.parse(setting_value);
@@ -258,7 +258,7 @@ router.get('/staff/list', async (req, res) => {
 
     if (is_active !== undefined) {
       query += ' AND is_active = $1';
-      params.push(is_active === 'true' $1 1 : 0);
+      params.push(is_active === 'true' ? 1 : 0);
     }
 
     query += ' ORDER BY full_name LIMIT $1 OFFSET $2';
@@ -393,7 +393,7 @@ router.put('/staff/:id', async (req, res) => {
     }
     if (is_active !== undefined) {
       updates.push('is_active = $1');
-      values.push(is_active $1 1 : 0);
+      values.push(is_active ? 1 : 0);
     }
 
     if (updates.length === 0) {
