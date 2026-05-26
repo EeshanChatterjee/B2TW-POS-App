@@ -22,9 +22,10 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 // ============================================
 
-// CORS
+// CORS - support multiple origins (local dev and Render)
+const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: corsOrigins,
   credentials: true
 }));
 
