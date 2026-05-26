@@ -139,13 +139,14 @@ async function startServer() {
     app.locals.db = db;
 
     // Start server
-    app.listen(PORT, process.env.HOST || 'localhost', () => {
+    const HOST = process.env.HOST || '0.0.0.0';
+    app.listen(PORT, HOST, () => {
       console.log(`
 ╔════════════════════════════════════════╗
 ║   BAO TO THE WINGS - POS System       ║
 ║   Server Running                       ║
 ╠════════════════════════════════════════╣
-║ 📍 URL:  http://localhost:${PORT}              ║
+║ 📍 URL:  http://0.0.0.0:${PORT}              ║
 ║ 🗄️  DB:   PostgreSQL (Render)         ║
 ║ 📝 API:  /api/*                       ║
 ║ ⚕️  Health: /api/health                ║
