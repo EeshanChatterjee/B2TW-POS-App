@@ -60,7 +60,7 @@ router.get('/sales', async (req, res) => {
     // Calculate averages and add price breakdowns
     Object.keys(salesByDate).forEach(date => {
       const data = salesByDate[date];
-      data.average_price = data.orders > 0 $1 roundCurrency(data.total_price / data.orders) : 0;
+      data.average_price = data.orders > 0 ? roundCurrency(data.total_price / data.orders) : 0;
 
       // Calculate base price and GST on-the-fly
       const totalBreakdown = getPriceBreakdown(data.total_price);
