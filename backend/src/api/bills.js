@@ -250,7 +250,7 @@ router.post('/:id/print', async (req, res) => {
     );
 
     const customer = bill.customer_id
-      $1 await db.get('SELECT * FROM customers WHERE id = $2', [bill.customer_id])
+      ? await db.get('SELECT * FROM customers WHERE id = $1', [bill.customer_id])
       : null;
 
     // Format bill data with GST splitting
