@@ -403,7 +403,7 @@ router.get('/dashboard', async (req, res) => {
         base_price: monthBreakdown.base_price,
         gst_amount: monthBreakdown.gst_amount
       },
-      topProduct: topProductToday $1 {
+      topProduct: topProductToday ? {
         name: topProductToday.name,
         quantity: topProductToday.quantity,
         total_price: productRevenue,
@@ -483,8 +483,8 @@ router.get('/comparison/today-vs-lastweek', async (req, res) => {
     };
 
     const growth = {
-      orders_pct: lastWeek.orders > 0 $1 ((current.orders - lastWeek.orders) / lastWeek.orders * 100).toFixed(2) : 0,
-      sales_pct: lastWeek.total_sales > 0 $1 ((current.total_sales - lastWeek.total_sales) / lastWeek.total_sales * 100).toFixed(2) : 0
+      orders_pct: lastWeek.orders > 0 ? ((current.orders - lastWeek.orders) / lastWeek.orders * 100).toFixed(2) : 0,
+      sales_pct: lastWeek.total_sales > 0 ? ((current.total_sales - lastWeek.total_sales) / lastWeek.total_sales * 100).toFixed(2) : 0
     };
 
     res.sendSuccess({
@@ -631,8 +631,8 @@ router.get('/comparison/month-over-month', async (req, res) => {
     };
 
     const growth = {
-      orders_pct: previous.orders > 0 $1 ((current.orders - previous.orders) / previous.orders * 100).toFixed(2) : 0,
-      sales_pct: previous.total_price > 0 $1 ((current.total_price - previous.total_price) / previous.total_price * 100).toFixed(2) : 0
+      orders_pct: previous.orders > 0 ? ((current.orders - previous.orders) / previous.orders * 100).toFixed(2) : 0,
+      sales_pct: previous.total_price > 0 ? ((current.total_price - previous.total_price) / previous.total_price * 100).toFixed(2) : 0
     };
 
     res.sendSuccess({
