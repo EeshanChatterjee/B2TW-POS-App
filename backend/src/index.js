@@ -10,6 +10,7 @@ import { errorHandler, notFound, responseWrapper } from './middleware/errorHandl
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const frontendDistPath = join(__dirname, '../../frontend/dist');
 
 // Load environment variables
 dotenv.config({ path: join(__dirname, '../.env') });
@@ -82,6 +83,26 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/settings', settingsRoutes);
+
+// ============================================
+// Serve Frontend Static Files
+// ============================================
+
+// Serve static files from the frontend dist folder
+app.use(express.static(frontendDistPath));
+
+// SPA fallback - serve index.html for all non-API routes
+app.get('*', (req, res) => {
+  // Don't serve index.html for API routes (they're already handled above)
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  res.sendFile(join(frontendDistPath, 'index.html'), (err) => {
+    if (err) {
+      res.status(404).json({ error: 'Frontend not found. Make sure to run: npm run build' });
+    }
+  });
+});
 
 // ============================================
 // Error Handling
