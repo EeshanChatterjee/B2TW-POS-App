@@ -143,10 +143,17 @@ router.get('/top-products', async (req, res) => {
     const productsWithBreakdown = topProducts.map(p => {
       // Ensure numeric values from PostgreSQL are actual numbers
       const revenue = typeof p.total_revenue === 'string' ? parseFloat(p.total_revenue) : (p.total_revenue || 0);
+      const quantity = typeof p.total_quantity === 'string' ? parseFloat(p.total_quantity) : (p.total_quantity || 0);
+      const orderCount = typeof p.order_count === 'string' ? parseInt(p.order_count) : (p.order_count || 0);
+      const avgQty = typeof p.avg_quantity === 'string' ? parseFloat(p.avg_quantity) : (p.avg_quantity || 0);
+
       const totalPrice = roundCurrency(revenue);
       const breakdown = getPriceBreakdown(totalPrice);
       return {
         ...p,
+        total_quantity: quantity,
+        order_count: orderCount,
+        avg_quantity: avgQty,
         total_revenue: totalPrice,
         total_price: totalPrice,
         base_price: breakdown.base_price,
@@ -157,6 +164,7 @@ router.get('/top-products', async (req, res) => {
     const totalPrices = productsWithBreakdown.map(p => p.total_price);
     const totalRevenue = sumTotalPrices(totalPrices);
     const revenueBreakdown = getPriceBreakdown(totalRevenue);
+    const totalProductsSold = productsWithBreakdown.reduce((sum, p) => sum + p.total_quantity, 0);
 
     res.sendSuccess({
       limit: parseInt(limit),
@@ -164,7 +172,7 @@ router.get('/top-products', async (req, res) => {
       endDate,
       data: productsWithBreakdown,
       summary: {
-        totalProductsSold: topProducts.reduce((sum, p) => sum + p.total_quantity, 0),
+        totalProductsSold: totalProductsSold,
         total_price: totalRevenue,
         base_price: revenueBreakdown.base_price,
         gst_amount: revenueBreakdown.gst_amount,
@@ -306,9 +314,13 @@ router.get('/revenue', async (req, res) => {
           breakdown: {}
         };
       }
-      revenueByPeriod[row.period].total = roundCurrency(revenueByPeriod[row.period].total + row.total_amount);
-      revenueByPeriod[row.period].orders += row.order_count;
-      revenueByPeriod[row.period].breakdown[row.payment_method || 'cash'] = row.total_amount;
+      // Convert numeric values from PostgreSQL
+      const orderCount = typeof row.order_count === 'string' ? parseInt(row.order_count) : (row.order_count || 0);
+      const totalAmount = typeof row.total_amount === 'string' ? parseFloat(row.total_amount) : (row.total_amount || 0);
+
+      revenueByPeriod[row.period].total = roundCurrency(revenueByPeriod[row.period].total + totalAmount);
+      revenueByPeriod[row.period].orders += orderCount;
+      revenueByPeriod[row.period].breakdown[row.payment_method || 'cash'] = totalAmount;
     });
 
     const revenueData = Object.values(revenueByPeriod);
@@ -353,7 +365,13 @@ router.get('/dashboard', async (req, res) => {
       WHERE DATE(created_at) = $1`,
       [today]
     );
-    const todaySales = todaySalesResult.rows[0];
+    const todaySalesRow = todaySalesResult.rows[0];
+    // Convert numeric values from PostgreSQL
+    const todaySales = todaySalesRow ? {
+      order_count: typeof todaySalesRow.order_count === 'string' ? parseInt(todaySalesRow.order_count) : (todaySalesRow.order_count || 0),
+      total_sales: typeof todaySalesRow.total_sales === 'string' ? parseFloat(todaySalesRow.total_sales) : (todaySalesRow.total_sales || 0),
+      avg_order_value: typeof todaySalesRow.avg_order_value === 'string' ? parseFloat(todaySalesRow.avg_order_value) : (todaySalesRow.avg_order_value || 0)
+    } : { order_count: 0, total_sales: 0, avg_order_value: 0 };
 
     // Get this month's sales
     const monthSalesResult = await db.query(
@@ -364,7 +382,12 @@ router.get('/dashboard', async (req, res) => {
       WHERE DATE(created_at) BETWEEN $1 AND $2`,
       [monthStart, today]
     );
-    const monthSales = monthSalesResult.rows[0];
+    const monthSalesRow = monthSalesResult.rows[0];
+    // Convert numeric values from PostgreSQL
+    const monthSales = monthSalesRow ? {
+      order_count: typeof monthSalesRow.order_count === 'string' ? parseInt(monthSalesRow.order_count) : (monthSalesRow.order_count || 0),
+      total_sales: typeof monthSalesRow.total_sales === 'string' ? parseFloat(monthSalesRow.total_sales) : (monthSalesRow.total_sales || 0)
+    } : { order_count: 0, total_sales: 0 };
 
     // Top product today
     const topProductTodayResult = await db.query(
@@ -381,7 +404,13 @@ router.get('/dashboard', async (req, res) => {
       LIMIT 1`,
       [today]
     );
-    const topProductToday = topProductTodayResult.rows[0];
+    const topProductTodayRow = topProductTodayResult.rows[0];
+    // Convert numeric values from PostgreSQL
+    const topProductToday = topProductTodayRow ? {
+      name: topProductTodayRow.name,
+      quantity: typeof topProductTodayRow.quantity === 'string' ? parseFloat(topProductTodayRow.quantity) : (topProductTodayRow.quantity || 0),
+      revenue: typeof topProductTodayRow.revenue === 'string' ? parseFloat(topProductTodayRow.revenue) : (topProductTodayRow.revenue || 0)
+    } : null;
 
     // Total customers today - distinct customers who ordered today
     const totalCustomersTodayResult = await db.query(
@@ -390,7 +419,10 @@ router.get('/dashboard', async (req, res) => {
        WHERE DATE(created_at) = $1 AND customer_id IS NOT NULL AND customer_id != ''`,
       [today]
     );
-    const totalCustomersToday = totalCustomersTodayResult.rows[0];
+    const totalCustomersTodayRow = totalCustomersTodayResult.rows[0];
+    const totalCustomersToday = totalCustomersTodayRow ? {
+      count: typeof totalCustomersTodayRow.count === 'string' ? parseInt(totalCustomersTodayRow.count) : (totalCustomersTodayRow.count || 0)
+    } : { count: 0 };
 
     // New customers today - customers whose first order was today
     const newCustomersTodayResult = await db.query(
@@ -406,7 +438,10 @@ router.get('/dashboard', async (req, res) => {
        )`,
       [today]
     );
-    const newCustomersToday = newCustomersTodayResult.rows[0];
+    const newCustomersTodayRow = newCustomersTodayResult.rows[0];
+    const newCustomersToday = newCustomersTodayRow ? {
+      count: typeof newCustomersTodayRow.count === 'string' ? parseInt(newCustomersTodayRow.count) : (newCustomersTodayRow.count || 0)
+    } : { count: 0 };
 
     const todayTotal = roundCurrency(todaySales?.total_sales || 0);
     const todayAvg = roundCurrency(todaySales?.avg_order_value || 0);
@@ -420,7 +455,7 @@ router.get('/dashboard', async (req, res) => {
 
     res.sendSuccess({
       today: {
-        order_count: todaySales?.order_count || 0,
+        order_count: todaySales.order_count,
         total_price: todayTotal,
         base_price: todayBreakdown.base_price,
         gst_amount: todayBreakdown.gst_amount,
@@ -429,7 +464,7 @@ router.get('/dashboard', async (req, res) => {
         avg_gst_amount: todayAvgBreakdown.gst_amount
       },
       thisMonth: {
-        order_count: monthSales?.order_count || 0,
+        order_count: monthSales.order_count,
         total_price: monthTotal,
         base_price: monthBreakdown.base_price,
         gst_amount: monthBreakdown.gst_amount
@@ -442,8 +477,8 @@ router.get('/dashboard', async (req, res) => {
         gst_amount: productBreakdown.gst_amount
       } : {},
       customers: {
-        total_customers_today: totalCustomersToday?.count || 0,
-        new_customers_today: newCustomersToday?.count || 0
+        total_customers_today: totalCustomersToday.count,
+        new_customers_today: newCustomersToday.count
       }
     });
   } catch (error) {
