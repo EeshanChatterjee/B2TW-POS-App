@@ -172,20 +172,32 @@ router.get('/:id', async (req, res) => {
     let totalBaseAmount = 0;
     let totalGstAmount = 0;
     const itemsWithGst = items.map(item => {
-      const itemBaseAmount = item.total_price / 1.05;
-      const itemGstAmount = item.total_price - itemBaseAmount;
+      // Ensure total_price is a number (PostgreSQL may return as string)
+      const itemTotalPrice = typeof item.total_price === 'string'
+        ? parseFloat(item.total_price)
+        : item.total_price || 0;
+
+      const itemBaseAmount = itemTotalPrice / 1.05;
+      const itemGstAmount = itemTotalPrice - itemBaseAmount;
       totalBaseAmount += itemBaseAmount;
       totalGstAmount += itemGstAmount;
 
       return {
         ...item,
+        total_price: itemTotalPrice,
         base_total: parseFloat(itemBaseAmount.toFixed(2)),
         gst_total: parseFloat(itemGstAmount.toFixed(2))
       };
     });
 
+    // Ensure bill.total_amount is a number
+    const billTotalAmount = typeof bill.total_amount === 'string'
+      ? parseFloat(bill.total_amount)
+      : bill.total_amount || 0;
+
     res.sendSuccess({
       ...bill,
+      total_amount: billTotalAmount,
       items: itemsWithGst,
       subtotal_base: parseFloat(totalBaseAmount.toFixed(2)),
       gst_amount: parseFloat(totalGstAmount.toFixed(2)),

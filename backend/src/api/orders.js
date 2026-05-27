@@ -37,10 +37,15 @@ async function generateAnonymousCustomerId(db) {
  * @returns {Object} Formatted item with total_price and breakdown
  */
 function formatOrderItem(item) {
-  const breakdown = getPriceBreakdown(item.total_price);
+  // Ensure total_price is a number (PostgreSQL may return as string)
+  const totalPrice = typeof item.total_price === 'string'
+    ? parseFloat(item.total_price)
+    : item.total_price || 0;
+
+  const breakdown = getPriceBreakdown(totalPrice);
   return {
     ...item,
-    total_price: item.total_price,
+    total_price: totalPrice,
     base_price: breakdown.base_price,
     gst_amount: breakdown.gst_amount
   };
