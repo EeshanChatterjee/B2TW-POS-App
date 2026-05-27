@@ -21,13 +21,14 @@ router.get('/search', async (req, res) => {
     }
 
     // Search by phone (exact match or prefix) or name (contains)
-    const customers = await db.all(
+    const customersResult = await db.query(
       `SELECT id, name, phone FROM customers
        WHERE is_active = true
        AND (phone LIKE $1 OR name LIKE $2)
        ORDER BY phone`,
       [`${q}%`, `%${q}%`]
     );
+    const customers = customersResult.rows;
 
     res.sendSuccess({
       count: customers.length,
@@ -47,10 +48,11 @@ router.get('/:id', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const customer = await db.get(
+    const customerResult = await db.query(
       'SELECT * FROM customers WHERE id = $1 AND is_active = true',
       [id]
     );
+    const customer = customerResult.rows[0];
 
     if (!customer) {
       return res.sendError('Customer not found', 404);
@@ -71,10 +73,11 @@ router.get('/phone/:phone', async (req, res) => {
     const db = await getDatabase();
     const { phone } = req.params;
 
-    const customer = await db.get(
+    const customerResult = await db.query(
       'SELECT * FROM customers WHERE phone = $1 AND is_active = true',
       [phone]
     );
+    const customer = customerResult.rows[0];
 
     if (!customer) {
       return res.sendSuccess(null);
@@ -101,10 +104,11 @@ router.post('/', async (req, res) => {
     }
 
     // Check if customer with this phone already exists
-    const existing = await db.get(
+    const existingResult = await db.query(
       'SELECT id FROM customers WHERE phone = $1',
       [phone]
     );
+    const existing = existingResult.rows[0];
 
     if (existing) {
       return res.sendError('Customer with this phone already exists', 409);
@@ -112,16 +116,17 @@ router.post('/', async (req, res) => {
 
     const customerId = `cust-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    await db.run(
-      `INSERT INTO customers (id, phone, name, email, is_active)
-       VALUES ($1, $2, $3, $4, 1)`,
+    await db.query(
+      `INSERT INTO customers (id, phone, name, email, is_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, true, NOW(), NOW())`,
       [customerId, phone, name || null, email || null]
     );
 
-    const customer = await db.get(
+    const customerResult = await db.query(
       'SELECT * FROM customers WHERE id = $1',
       [customerId]
     );
+    const customer = customerResult.rows[0];
 
     res.sendSuccess(customer);
   } catch (error) {
@@ -139,25 +144,27 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { name, email } = req.body;
 
-    const customer = await db.get(
+    const customerResult = await db.query(
       'SELECT * FROM customers WHERE id = $1',
       [id]
     );
+    const customer = customerResult.rows[0];
 
     if (!customer) {
       return res.sendError('Customer not found', 404);
     }
 
-    await db.run(
-      `UPDATE customers SET name = $1, email = $2, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
+    await db.query(
+      `UPDATE customers SET name = $1, email = $2, updated_at = NOW()
+       WHERE id = $3`,
       [name || customer.name, email || customer.email, id]
     );
 
-    const updated = await db.get(
+    const updatedResult = await db.query(
       'SELECT * FROM customers WHERE id = $1',
       [id]
     );
+    const updated = updatedResult.rows[0];
 
     res.sendSuccess(updated);
   } catch (error) {
@@ -174,16 +181,17 @@ router.get('/:id/history', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const customer = await db.get(
+    const customerResult = await db.query(
       'SELECT * FROM customers WHERE id = $1 AND is_active = true',
       [id]
     );
+    const customer = customerResult.rows[0];
 
     if (!customer) {
       return res.sendError('Customer not found', 404);
     }
 
-    const orders = await db.all(
+    const ordersResult = await db.query(
       `SELECT o.id, o.total_amount, o.payment_method, o.status, o.created_at
        FROM orders o
        WHERE o.customer_id = $1
@@ -191,6 +199,7 @@ router.get('/:id/history', async (req, res) => {
        LIMIT 20`,
       [id]
     );
+    const orders = ordersResult.rows;
 
     res.sendSuccess({
       customer,

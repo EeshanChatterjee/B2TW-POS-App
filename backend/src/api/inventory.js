@@ -36,15 +36,18 @@ router.get('/', async (req, res) => {
     query += ' ORDER BY p.category, p.name LIMIT $1 OFFSET $2';
     params.push(parseInt(limit), parseInt(offset));
 
-    const inventory = await db.all(query, params);
+    const inventoryResult = await db.query(query, params);
+    const inventory = inventoryResult.rows;
 
     // Count totals
-    const countResult = await db.get(
+    const countResultQuery = await db.query(
       'SELECT COUNT(*) as total FROM inventory'
     );
-    const lowStockResult = await db.get(
+    const countResult = countResultQuery.rows[0] || { total: 0 };
+    const lowStockResultQuery = await db.query(
       'SELECT COUNT(*) as count FROM inventory WHERE current_stock <= min_stock'
     );
+    const lowStockResult = lowStockResultQuery.rows[0] || { count: 0 };
 
     res.sendSuccess({
       count: inventory.length,
@@ -66,24 +69,26 @@ router.get('/:productId', async (req, res) => {
     const db = await getDatabase();
     const { productId } = req.params;
 
-    const inventory = await db.get(
+    const inventoryResult = await db.query(
       `SELECT i.*, p.name, p.category, p.price
        FROM inventory i
        JOIN products p ON i.product_id = p.id
        WHERE i.product_id = $1`,
       [productId]
     );
+    const inventory = inventoryResult.rows[0];
 
     if (!inventory) {
       return res.sendError('Inventory not found', 404);
     }
 
     // Get recent logs
-    const logs = await db.all(
+    const logsResult = await db.query(
       `SELECT * FROM inventory_logs WHERE product_id = $1
        ORDER BY created_at DESC LIMIT 20`,
       [productId]
     );
+    const logs = logsResult.rows;
 
     res.sendSuccess({
       inventory,
@@ -114,10 +119,11 @@ router.post('/:productId/adjust', async (req, res) => {
     }
 
     // Get current inventory
-    const inventory = await db.get(
+    const inventoryResult = await db.query(
       'SELECT * FROM inventory WHERE product_id = $1',
       [productId]
     );
+    const inventory = inventoryResult.rows[0];
 
     if (!inventory) {
       return res.sendError('Product inventory not found', 404);
@@ -132,14 +138,14 @@ router.post('/:productId/adjust', async (req, res) => {
 
     // Update inventory
     const now = new Date().toISOString();
-    await db.run(
+    await db.query(
       'UPDATE inventory SET current_stock = $1, updated_at = $2 WHERE product_id = $3',
       [newStock, now, productId]
     );
 
     // Log the transaction
     const logId = uuidv4();
-    await db.run(
+    await db.query(
       `INSERT INTO inventory_logs (id, product_id, transaction_type, quantity_change, previous_stock, new_stock, reason, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [logId, productId, transaction_type, quantity_change, previousStock, newStock, reason, now]
@@ -149,14 +155,14 @@ router.post('/:productId/adjust', async (req, res) => {
     if (newStock <= inventory.min_stock && previousStock > inventory.min_stock) {
       const alertId = uuidv4();
       const alertType = newStock === 0 ? 'out_of_stock' : 'low_stock';
-      await db.run(
+      await db.query(
         `INSERT INTO inventory_alerts (id, product_id, alert_type, current_stock, threshold_level, is_active, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [alertId, productId, alertType, newStock, inventory.min_stock, 1, now, now]
       );
     } else if (newStock > inventory.min_stock) {
       // Acknowledge any active low stock alerts
-      await db.run(
+      await db.query(
         'UPDATE inventory_alerts SET is_active = false, acknowledged_at = $1 WHERE product_id = $2 AND is_active = true',
         [now, productId]
       );
@@ -184,7 +190,7 @@ router.get('/alerts/active', async (req, res) => {
     const db = await getDatabase();
     const { limit = 50, offset = 0 } = req.query;
 
-    const alerts = await db.all(
+    const alertsResult = await db.query(
       `SELECT ia.*, p.name, p.category, i.current_stock, i.min_stock
        FROM inventory_alerts ia
        JOIN products p ON ia.product_id = p.id
@@ -194,10 +200,12 @@ router.get('/alerts/active', async (req, res) => {
        LIMIT $1 OFFSET $2`,
       [parseInt(limit), parseInt(offset)]
     );
+    const alerts = alertsResult.rows;
 
-    const countResult = await db.get(
+    const countResultQuery = await db.query(
       'SELECT COUNT(*) as count FROM inventory_alerts WHERE is_active = true'
     );
+    const countResult = countResultQuery.rows[0];
 
     res.sendSuccess({
       count: alerts.length,
@@ -219,17 +227,18 @@ router.post('/alerts/:alertId/acknowledge', async (req, res) => {
     const { alertId } = req.params;
     const { acknowledged_by } = req.body;
 
-    const alert = await db.get(
+    const alertResult = await db.query(
       'SELECT * FROM inventory_alerts WHERE id = $1',
       [alertId]
     );
+    const alert = alertResult.rows[0];
 
     if (!alert) {
       return res.sendError('Alert not found', 404);
     }
 
     const now = new Date().toISOString();
-    await db.run(
+    await db.query(
       'UPDATE inventory_alerts SET is_active = false, acknowledged_at = $1, acknowledged_by = $2, updated_at = $3 WHERE id = $4',
       [now, acknowledged_by || null, now, alertId]
     );
@@ -258,24 +267,25 @@ router.get('/logs/history', async (req, res) => {
       FROM inventory_logs il
       JOIN products p ON il.product_id = p.id
       LEFT JOIN admin_users au ON il.adjusted_by = au.id
-      WHERE datetime(il.created_at) >= datetime('now', '-' || $1 || ' days')
+      WHERE il.created_at >= NOW() - INTERVAL '1 day' * $1
     `;
     const params = [parseInt(days)];
 
     if (product_id) {
-      query += ' AND il.product_id = $1';
+      query += ' AND il.product_id = $' + (params.length + 1);
       params.push(product_id);
     }
 
     if (transaction_type) {
-      query += ' AND il.transaction_type = $1';
+      query += ' AND il.transaction_type = $' + (params.length + 1);
       params.push(transaction_type);
     }
 
-    query += ' ORDER BY il.created_at DESC LIMIT $1 OFFSET $2';
+    query += ' ORDER BY il.created_at DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
     params.push(parseInt(limit), parseInt(offset));
 
-    const logs = await db.all(query, params);
+    const logsResult = await db.query(query, params);
+    const logs = logsResult.rows;
 
     res.sendSuccess({
       count: logs.length,
@@ -295,7 +305,7 @@ router.get('/summary/categories', async (req, res) => {
   try {
     const db = await getDatabase();
 
-    const categories = await db.all(
+    const categoriesResult = await db.query(
       `SELECT p.category,
               COUNT(DISTINCT i.product_id) as product_count,
               SUM(i.current_stock) as total_stock,
@@ -307,6 +317,7 @@ router.get('/summary/categories', async (req, res) => {
        GROUP BY p.category
        ORDER BY p.category`
     );
+    const categories = categoriesResult.rows;
 
     res.sendSuccess({
       data: categories
@@ -327,16 +338,17 @@ router.post('/initialize', async (req, res) => {
     const { default_stock = 0, min_stock = 5, max_stock = 100 } = req.body;
 
     // Get all products without inventory
-    const products = await db.all(
+    const productsResult = await db.query(
       `SELECT id FROM products WHERE id NOT IN (SELECT product_id FROM inventory)`
     );
+    const products = productsResult.rows;
 
     const now = new Date().toISOString();
     let createdCount = 0;
 
     for (const product of products) {
       const invId = uuidv4();
-      await db.run(
+      await db.query(
         `INSERT INTO inventory (id, product_id, current_stock, min_stock, max_stock, reorder_level, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [invId, product.id, default_stock, min_stock, max_stock, Math.ceil(min_stock * 1.5), now, now]

@@ -28,7 +28,8 @@ router.get('/', async (req, res) => {
     }
 
     query += ' ORDER BY category, setting_key';
-    const settings = await db.all(query, params);
+    const settingsResult = await db.query(query, params);
+    const settings = settingsResult.rows;
 
     // Convert setting values based on type
     const processedSettings = settings.map(s => ({
@@ -57,10 +58,11 @@ router.get('/categories/:category', async (req, res) => {
     const db = await getDatabase();
     const { category } = req.params;
 
-    const settings = await db.all(
+    const settingsResult = await db.query(
       'SELECT * FROM settings WHERE category = $1 ORDER BY setting_key',
       [category]
     );
+    const settings = settingsResult.rows;
 
     const processedSettings = settings.map(s => ({
       ...s,
@@ -88,10 +90,11 @@ router.get('/:key', async (req, res) => {
     const db = await getDatabase();
     const { key } = req.params;
 
-    const setting = await db.get(
+    const settingResult = await db.query(
       'SELECT * FROM settings WHERE setting_key = $1',
       [key]
     );
+    const setting = settingResult.rows[0];
 
     if (!setting) {
       return res.sendError('Setting not found', 404);
@@ -122,10 +125,11 @@ router.put('/:key', async (req, res) => {
     const { key } = req.params;
     const { setting_value } = req.body;
 
-    const setting = await db.get(
+    const settingResult = await db.query(
       'SELECT * FROM settings WHERE setting_key = $1',
       [key]
     );
+    const setting = settingResult.rows[0];
 
     if (!setting) {
       return res.sendError('Setting not found', 404);
@@ -149,7 +153,7 @@ router.put('/:key', async (req, res) => {
     }
 
     const now = new Date().toISOString();
-    await db.run(
+    await db.query(
       'UPDATE settings SET setting_value = $1, updated_at = $2 WHERE setting_key = $3',
       [String(finalValue), now, key]
     );
@@ -214,14 +218,15 @@ router.post('/initialize', async (req, res) => {
     let createdCount = 0;
 
     for (const setting of defaultSettings) {
-      const existingSetting = await db.get(
+      const existingSettingResult = await db.query(
         'SELECT id FROM settings WHERE setting_key = $1',
         [setting.key]
       );
+      const existingSetting = existingSettingResult.rows[0];
 
       if (!existingSetting) {
         const id = uuidv4();
-        await db.run(
+        await db.query(
           `INSERT INTO settings (id, setting_key, setting_value, setting_type, category, description, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [id, setting.key, setting.value, setting.type, setting.category, setting.desc, now, now]
@@ -264,9 +269,11 @@ router.get('/staff/list', async (req, res) => {
     query += ' ORDER BY full_name LIMIT $1 OFFSET $2';
     params.push(parseInt(limit), parseInt(offset));
 
-    const staff = await db.all(query, params);
+    const staffResult = await db.query(query, params);
+    const staff = staffResult.rows;
 
-    const countResult = await db.get('SELECT COUNT(*) as count FROM staff_users');
+    const countResultQuery = await db.query('SELECT COUNT(*) as count FROM staff_users');
+    const countResult = countResultQuery.rows[0];
 
     res.sendSuccess({
       count: staff.length,
@@ -287,11 +294,12 @@ router.get('/staff/:id', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const staff = await db.get(
+    const staffResult = await db.query(
       `SELECT id, username, full_name, email, role, is_active, phone, address, hire_date, last_login, created_at
        FROM staff_users WHERE id = $1`,
       [id]
     );
+    const staff = staffResult.rows[0];
 
     if (!staff) {
       return res.sendError('Staff member not found', 404);
@@ -318,10 +326,11 @@ router.post('/staff', async (req, res) => {
     }
 
     // Check if username exists
-    const existingUser = await db.get(
+    const existingUserResult = await db.query(
       'SELECT id FROM staff_users WHERE username = $1',
       [username]
     );
+    const existingUser = existingUserResult.rows[0];
 
     if (existingUser) {
       return res.sendError('Username already exists', 400);
@@ -331,7 +340,7 @@ router.post('/staff', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const now = new Date().toISOString();
 
-    await db.run(
+    await db.query(
       `INSERT INTO staff_users (id, username, password_hash, full_name, email, role, phone, address, hire_date, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [id, username, passwordHash, full_name, email, role, phone, address, hire_date, now, now]
@@ -361,7 +370,8 @@ router.put('/staff/:id', async (req, res) => {
     const { id } = req.params;
     const { full_name, email, role, phone, address, is_active } = req.body;
 
-    const staff = await db.get('SELECT id FROM staff_users WHERE id = $1', [id]);
+    const staffResult = await db.query('SELECT id FROM staff_users WHERE id = $1', [id]);
+    const staff = staffResult.rows[0];
 
     if (!staff) {
       return res.sendError('Staff member not found', 404);
@@ -404,7 +414,7 @@ router.put('/staff/:id', async (req, res) => {
     values.push(now);
     values.push(id);
 
-    await db.run(
+    await db.query(
       `UPDATE staff_users SET ${updates.join(', ')} WHERE id = $1`,
       values
     );
@@ -427,14 +437,15 @@ router.delete('/staff/:id', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const staff = await db.get('SELECT id FROM staff_users WHERE id = $1', [id]);
+    const staffResult = await db.query('SELECT id FROM staff_users WHERE id = $1', [id]);
+    const staff = staffResult.rows[0];
 
     if (!staff) {
       return res.sendError('Staff member not found', 404);
     }
 
     const now = new Date().toISOString();
-    await db.run(
+    await db.query(
       'UPDATE staff_users SET is_active = false, updated_at = $1 WHERE id = $2',
       [now, id]
     );

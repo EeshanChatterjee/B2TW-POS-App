@@ -24,10 +24,11 @@ router.post('/login', async (req, res) => {
     const db = await getDatabase();
 
     // Find user by username
-    const user = await db.get(
+    const userResult = await db.query(
       'SELECT id, username, password_hash, role, is_active FROM staff_users WHERE username = $1',
       [username]
     );
+    const user = userResult.rows[0];
 
     if (!user) {
       return res.sendError('Invalid username or password', 401);

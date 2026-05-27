@@ -20,27 +20,32 @@ router.post('/', async (req, res) => {
     }
 
     // Get order
-    const order = await db.get('SELECT * FROM orders WHERE id = $1', [order_id]);
+    const orderResult = await db.query('SELECT * FROM orders WHERE id = $1', [order_id]);
+    const order = orderResult.rows[0];
     if (!order) {
       return res.sendError('Order not found', 404);
     }
 
     // Get order items
-    const items = await db.all(
+    const itemsResult = await db.query(
       'SELECT oi.*, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = $1',
       [order_id]
     );
+    const items = itemsResult.rows;
 
     // Get customer info if available
     let customer = null;
     if (order.customer_id) {
-      customer = await db.get('SELECT * FROM customers WHERE id = $1', [order.customer_id]);
+      const customerResult = await db.query('SELECT * FROM customers WHERE id = $1', [order.customer_id]);
+      customer = customerResult.rows[0];
     } else if (customer_phone) {
-      customer = await db.get('SELECT * FROM customers WHERE phone = $1', [customer_phone]);
+      const customerResult = await db.query('SELECT * FROM customers WHERE phone = $1', [customer_phone]);
+      customer = customerResult.rows[0];
     }
 
     // Get next bill number
-    const billCountResult = await db.get('SELECT COUNT(*) as count FROM bills');
+    const billCountResultQuery = await db.query('SELECT COUNT(*) as count FROM bills');
+    const billCountResult = billCountResultQuery.rows[0];
     const bill_number = `B${String(billCountResult.count + 1).padStart(6, '0')}`;
 
     const billId = uuidv4();
@@ -71,7 +76,7 @@ router.post('/', async (req, res) => {
     console.log('📋 Bill GST Breakdown:', { subtotalBase, gstAmount, total: order.total_amount, itemCount: items.length });
 
     // Create bill record
-    await db.run(
+    await db.query(
       `INSERT INTO bills (id, order_id, bill_number, customer_id, total_amount, payment_method, status, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [billId, order_id, bill_number, order.customer_id || null, order.total_amount, order.payment_method, 'paid', now]
@@ -102,7 +107,7 @@ router.get('/held', async (req, res) => {
     const db = await getDatabase();
     const { limit = 50, offset = 0 } = req.query;
 
-    const heldBills = await db.all(
+    const heldBillsResult = await db.query(
       `SELECT b.*, bh.id as hold_id, bh.reason, bh.held_at, bh.notes
        FROM bills b
        JOIN bill_holds bh ON b.id = bh.bill_id
@@ -111,10 +116,12 @@ router.get('/held', async (req, res) => {
        LIMIT $1 OFFSET $2`,
       [parseInt(limit), parseInt(offset)]
     );
+    const heldBills = heldBillsResult.rows;
 
-    const countResult = await db.get(
+    const countResultQuery = await db.query(
       `SELECT COUNT(*) as count FROM bills WHERE status = 'held'`
     );
+    const countResult = countResultQuery.rows[0];
 
     res.sendSuccess({
       count: heldBills.length,
@@ -135,26 +142,30 @@ router.get('/:id', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const bill = await db.get(
+    const billResult = await db.query(
       'SELECT * FROM bills WHERE id = $1',
       [id]
     );
+    const bill = billResult.rows[0];
 
     if (!bill) {
       return res.sendError('Bill not found', 404);
     }
 
     // Get order and items
-    const order = await db.get('SELECT * FROM orders WHERE id = $1', [bill.order_id]);
-    const items = await db.all(
+    const orderResult = await db.query('SELECT * FROM orders WHERE id = $1', [bill.order_id]);
+    const order = orderResult.rows[0];
+    const itemsResult = await db.query(
       'SELECT oi.*, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = $1',
       [bill.order_id]
     );
+    const items = itemsResult.rows;
 
     // Get customer info
     let customer = null;
     if (bill.customer_id) {
-      customer = await db.get('SELECT * FROM customers WHERE id = $1', [bill.customer_id]);
+      const customerResult = await db.query('SELECT * FROM customers WHERE id = $1', [bill.customer_id]);
+      customer = customerResult.rows[0];
     }
 
     // Calculate GST breakdown
@@ -206,7 +217,8 @@ router.get('/', async (req, res) => {
     query += ' ORDER BY created_at DESC LIMIT $1 OFFSET $2';
     params.push(parseInt(limit), parseInt(offset));
 
-    const bills = await db.all(query, params);
+    const billsResult = await db.query(query, params);
+    const bills = billsResult.rows;
 
     // Calculate GST breakdown for each bill
     const billsWithGst = bills.map(bill => {
@@ -237,21 +249,26 @@ router.post('/:id/print', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const bill = await db.get('SELECT * FROM bills WHERE id = $1', [id]);
+    const billResult = await db.query('SELECT * FROM bills WHERE id = $1', [id]);
+    const bill = billResult.rows[0];
     if (!bill) {
       return res.sendError('Bill not found', 404);
     }
 
     // Get bill details
-    const order = await db.get('SELECT * FROM orders WHERE id = $1', [bill.order_id]);
-    const items = await db.all(
+    const orderResult = await db.query('SELECT * FROM orders WHERE id = $1', [bill.order_id]);
+    const order = orderResult.rows[0];
+    const itemsResult = await db.query(
       'SELECT oi.*, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = $1',
       [bill.order_id]
     );
+    const items = itemsResult.rows;
 
-    const customer = bill.customer_id
-      ? await db.get('SELECT * FROM customers WHERE id = $1', [bill.customer_id])
-      : null;
+    let customer = null;
+    if (bill.customer_id) {
+      const customerResult = await db.query('SELECT * FROM customers WHERE id = $1', [bill.customer_id]);
+      customer = customerResult.rows[0];
+    }
 
     // Format bill data with GST splitting
     // All prices include 5% GST: base = price / 1.05, gst = price - base
@@ -315,7 +332,7 @@ router.post('/:id/print', async (req, res) => {
     }
 
     // Update bill updated_at timestamp
-    await db.run(
+    await db.query(
       'UPDATE bills SET updated_at = $1 WHERE id = $2',
       [new Date().toISOString(), id]
     );
@@ -344,7 +361,8 @@ router.post('/:id/hold', async (req, res) => {
       return res.sendError('Hold reason is required', 400);
     }
 
-    const bill = await db.get('SELECT * FROM bills WHERE id = $1', [id]);
+    const billResult = await db.query('SELECT * FROM bills WHERE id = $1', [id]);
+    const bill = billResult.rows[0];
     if (!bill) {
       return res.sendError('Bill not found', 404);
     }
@@ -353,14 +371,14 @@ router.post('/:id/hold', async (req, res) => {
     const holdId = uuidv4();
     const now = new Date().toISOString();
 
-    await db.run(
+    await db.query(
       `INSERT INTO bill_holds (id, bill_id, reason, held_at, notes, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [holdId, id, reason, now, notes || null, now, now]
     );
 
     // Update bill status to held
-    await db.run(
+    await db.query(
       'UPDATE bills SET status = $1, updated_at = $2 WHERE id = $3',
       ['held', now, id]
     );
@@ -384,7 +402,8 @@ router.post('/:id/resume', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const bill = await db.get('SELECT * FROM bills WHERE id = $1', [id]);
+    const billResult = await db.query('SELECT * FROM bills WHERE id = $1', [id]);
+    const bill = billResult.rows[0];
     if (!bill) {
       return res.sendError('Bill not found', 404);
     }
@@ -394,10 +413,11 @@ router.post('/:id/resume', async (req, res) => {
     }
 
     // Get the current hold
-    const hold = await db.get(
+    const holdResult = await db.query(
       `SELECT * FROM bill_holds WHERE bill_id = $1 AND resumed_at IS NULL ORDER BY held_at DESC LIMIT 1`,
       [id]
     );
+    const hold = holdResult.rows[0];
 
     if (!hold) {
       return res.sendError('No active hold found for this bill', 400);
@@ -406,13 +426,13 @@ router.post('/:id/resume', async (req, res) => {
     const now = new Date().toISOString();
 
     // Update hold to mark as resumed
-    await db.run(
+    await db.query(
       'UPDATE bill_holds SET resumed_at = $1, updated_at = $2 WHERE id = $3',
       [now, now, hold.id]
     );
 
     // Update bill status back to paid
-    await db.run(
+    await db.query(
       'UPDATE bills SET status = $1, updated_at = $2 WHERE id = $3',
       ['paid', now, id]
     );
@@ -438,15 +458,17 @@ router.get('/:id/holds', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const bill = await db.get('SELECT * FROM bills WHERE id = $1', [id]);
+    const billResult = await db.query('SELECT * FROM bills WHERE id = $1', [id]);
+    const bill = billResult.rows[0];
     if (!bill) {
       return res.sendError('Bill not found', 404);
     }
 
-    const holds = await db.all(
+    const holdsResult = await db.query(
       `SELECT * FROM bill_holds WHERE bill_id = $1 ORDER BY held_at DESC`,
       [id]
     );
+    const holds = holdsResult.rows;
 
     res.sendSuccess({
       bill_id: id,

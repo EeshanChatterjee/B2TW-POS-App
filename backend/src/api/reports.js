@@ -26,7 +26,7 @@ router.get('/sales', async (req, res) => {
     }
 
     // Get all orders in date range
-    const orders = await db.all(
+    const ordersResult = await db.query(
       `SELECT
         DATE(created_at) as date,
         COUNT(*) as order_count,
@@ -39,6 +39,7 @@ router.get('/sales', async (req, res) => {
       ORDER BY date DESC`,
       [startDate, endDate]
     );
+    const orders = ordersResult.rows;
 
     // Aggregate by date
     const salesByDate = {};
@@ -128,10 +129,11 @@ router.get('/top-products', async (req, res) => {
 
     query += ` GROUP BY p.id, p.name, p.category
       ORDER BY total_revenue DESC
-      LIMIT $1`;
+      LIMIT $` + (params.length + 1);
     params.push(parseInt(limit));
 
-    const topProducts = await db.all(query, params);
+    const topProductsResult = await db.query(query, params);
+    const topProducts = topProductsResult.rows;
 
     // Format products with price breakdowns calculated on-the-fly
     const productsWithBreakdown = topProducts.map(p => {
@@ -187,7 +189,7 @@ router.get('/customers', async (req, res) => {
     }
 
     // Get customer stats
-    const customerStats = await db.all(
+    const customerStatsResult = await db.query(
       `SELECT
         c.id,
         c.name,
@@ -200,13 +202,14 @@ router.get('/customers', async (req, res) => {
       FROM customers c
       LEFT JOIN orders o ON c.id = o.customer_id ${dateFilter}
       GROUP BY c.id
-      HAVING order_count > 0
+      HAVING COUNT(o.id) > 0
       ORDER BY total_spent DESC`,
       params
     );
+    const customerStats = customerStatsResult.rows;
 
     // Overall metrics
-    const metrics = await db.get(
+    const metricsResult = await db.query(
       `SELECT
         COUNT(DISTINCT c.id) as total_customers,
         COUNT(DISTINCT CASE WHEN DATE(o.created_at) BETWEEN $1 AND $2 THEN c.id END) as active_customers,
@@ -216,6 +219,7 @@ router.get('/customers', async (req, res) => {
       LEFT JOIN orders o ON c.id = o.customer_id`,
       [startDate, endDate, startDate, endDate]
     );
+    const metrics = metricsResult.rows[0];
 
     res.sendSuccess({
       startDate,
@@ -247,16 +251,16 @@ router.get('/revenue', async (req, res) => {
     let dateGrouping;
     switch (groupBy) {
       case 'week':
-        dateGrouping = "DATE(DATETIME(created_at, '-' || (CAST(STRFTIME('%w', created_at) AS INTEGER)) || ' days'))";
+        dateGrouping = "DATE(created_at - INTERVAL '1 day' * EXTRACT(DOW FROM created_at))";
         break;
       case 'month':
-        dateGrouping = "DATE(DATETIME(created_at, 'start of month'))";
+        dateGrouping = "DATE(created_at - INTERVAL '1 day' * (EXTRACT(DAY FROM created_at) - 1))";
         break;
       default:
         dateGrouping = "DATE(created_at)";
     }
 
-    const revenue = await db.all(
+    const revenueResult = await db.query(
       `SELECT
         ${dateGrouping} as period,
         payment_method,
@@ -264,10 +268,11 @@ router.get('/revenue', async (req, res) => {
         COALESCE(SUM(total_amount), 0) as total_amount
       FROM orders
       WHERE DATE(created_at) BETWEEN $1 AND $2
-      GROUP BY period, payment_method
+      GROUP BY ${dateGrouping}, payment_method
       ORDER BY period DESC`,
       [startDate, endDate]
     );
+    const revenue = revenueResult.rows;
 
     // Aggregate by period
     const revenueByPeriod = {};
@@ -318,7 +323,7 @@ router.get('/dashboard', async (req, res) => {
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
 
     // Get today's sales
-    const todaySales = await db.get(
+    const todaySalesResult = await db.query(
       `SELECT
         COUNT(*) as order_count,
         COALESCE(SUM(total_amount), 0) as total_sales,
@@ -327,9 +332,10 @@ router.get('/dashboard', async (req, res) => {
       WHERE DATE(created_at) = $1`,
       [today]
     );
+    const todaySales = todaySalesResult.rows[0];
 
     // Get this month's sales
-    const monthSales = await db.get(
+    const monthSalesResult = await db.query(
       `SELECT
         COUNT(*) as order_count,
         COALESCE(SUM(total_amount), 0) as total_sales
@@ -337,9 +343,10 @@ router.get('/dashboard', async (req, res) => {
       WHERE DATE(created_at) BETWEEN $1 AND $2`,
       [monthStart, today]
     );
+    const monthSales = monthSalesResult.rows[0];
 
     // Top product today
-    const topProductToday = await db.get(
+    const topProductTodayResult = await db.query(
       `SELECT
         p.name,
         SUM(oi.quantity) as quantity,
@@ -353,29 +360,32 @@ router.get('/dashboard', async (req, res) => {
       LIMIT 1`,
       [today]
     );
+    const topProductToday = topProductTodayResult.rows[0];
 
     // Total customers today - distinct customers who ordered today
-    const totalCustomersToday = await db.get(
+    const totalCustomersTodayResult = await db.query(
       `SELECT COUNT(DISTINCT customer_id) as count
        FROM orders
        WHERE DATE(created_at) = $1 AND customer_id IS NOT NULL AND customer_id != ''`,
       [today]
     );
+    const totalCustomersToday = totalCustomersTodayResult.rows[0];
 
     // New customers today - customers whose first order was today
-    const newCustomersToday = await db.get(
+    const newCustomersTodayResult = await db.query(
       `SELECT COUNT(DISTINCT customer_id) as count
        FROM orders
-       WHERE DATE(created_at) = ?
+       WHERE DATE(created_at) = $1
        AND customer_id IS NOT NULL
        AND customer_id != ''
        AND customer_id NOT IN (
          SELECT DISTINCT customer_id
          FROM orders
-         WHERE DATE(created_at) < ? AND customer_id IS NOT NULL AND customer_id != ''
+         WHERE DATE(created_at) < $1 AND customer_id IS NOT NULL AND customer_id != ''
        )`,
-      [today, today]
+      [today]
     );
+    const newCustomersToday = newCustomersTodayResult.rows[0];
 
     const todayTotal = roundCurrency(todaySales?.total_sales || 0);
     const todayAvg = roundCurrency(todaySales?.avg_order_value || 0);
@@ -433,7 +443,7 @@ router.get('/comparison/today-vs-lastweek', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const lastWeekDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const todayData = await db.get(
+    const todayDataResult = await db.query(
       `SELECT
         COUNT(*) as orders,
         COALESCE(SUM(total_amount), 0) as total_sales,
@@ -442,8 +452,9 @@ router.get('/comparison/today-vs-lastweek', async (req, res) => {
       WHERE DATE(created_at) = $1`,
       [today]
     );
+    const todayData = todayDataResult.rows[0];
 
-    const lastWeekData = await db.get(
+    const lastWeekDataResult = await db.query(
       `SELECT
         COUNT(*) as orders,
         COALESCE(SUM(total_amount), 0) as total_sales,
@@ -452,6 +463,7 @@ router.get('/comparison/today-vs-lastweek', async (req, res) => {
       WHERE DATE(created_at) = $1`,
       [lastWeekDate]
     );
+    const lastWeekData = lastWeekDataResult.rows[0];
 
     const currentTotal = roundCurrency(todayData?.total_sales || 0);
     const currentAvg = roundCurrency(todayData?.avg_order || 0);
@@ -512,9 +524,9 @@ router.get('/comparison/day-of-week', async (req, res) => {
       return res.sendError('startDate and endDate are required', 400);
     }
 
-    const dayOfWeekData = await db.all(
+    const dayOfWeekDataResult = await db.query(
       `SELECT
-        CASE CAST(strftime('%w', created_at) AS INTEGER)
+        CASE EXTRACT(DOW FROM created_at)::integer
           WHEN 0 THEN 'Sunday'
           WHEN 1 THEN 'Monday'
           WHEN 2 THEN 'Tuesday'
@@ -528,10 +540,11 @@ router.get('/comparison/day-of-week', async (req, res) => {
         AVG(total_amount) as avg_order
       FROM orders
       WHERE DATE(created_at) BETWEEN $1 AND $2
-      GROUP BY strftime('%w', created_at)
-      ORDER BY CAST(strftime('%w', created_at) AS INTEGER)`,
+      GROUP BY EXTRACT(DOW FROM created_at)::integer
+      ORDER BY EXTRACT(DOW FROM created_at)::integer`,
       [startDate, endDate]
     );
+    const dayOfWeekData = dayOfWeekDataResult.rows;
 
     // Format with price breakdowns calculated on-the-fly
     const formattedData = dayOfWeekData.map(d => {
@@ -577,27 +590,29 @@ router.get('/comparison/month-over-month', async (req, res) => {
     prevMonth.setMonth(prevMonth.getMonth() - 1);
     const prevMonthStr = prevMonth.toISOString().substring(0, 7);
 
-    const currentMonthData = await db.get(
+    const currentMonthDataResult = await db.query(
       `SELECT
         COUNT(*) as orders,
         SUM(total_amount) as total_sales,
         AVG(total_amount) as avg_order,
         COUNT(DISTINCT customer_id) as customers
       FROM orders
-      WHERE strftime('%Y-%m', created_at) = $1`,
+      WHERE TO_CHAR(created_at, 'YYYY-MM') = $1`,
       [targetMonth]
     );
+    const currentMonthData = currentMonthDataResult.rows[0];
 
-    const previousMonthData = await db.get(
+    const previousMonthDataResult = await db.query(
       `SELECT
         COUNT(*) as orders,
         SUM(total_amount) as total_sales,
         AVG(total_amount) as avg_order,
         COUNT(DISTINCT customer_id) as customers
       FROM orders
-      WHERE strftime('%Y-%m', created_at) = $1`,
+      WHERE TO_CHAR(created_at, 'YYYY-MM') = $1`,
       [prevMonthStr]
     );
+    const previousMonthData = previousMonthDataResult.rows[0];
 
     const currentTotal = roundCurrency(currentMonthData?.total_sales || 0);
     const currentAvg = roundCurrency(currentMonthData?.avg_order || 0);
@@ -660,7 +675,7 @@ router.get('/category-sales', async (req, res) => {
       return res.sendError('startDate and endDate are required', 400);
     }
 
-    const categorySales = await db.all(
+    const categorySalesResult = await db.query(
       `SELECT
         p.category,
         COUNT(DISTINCT o.id) as order_count,
@@ -676,6 +691,7 @@ router.get('/category-sales', async (req, res) => {
       ORDER BY total_sales DESC`,
       [startDate, endDate]
     );
+    const categorySales = categorySalesResult.rows;
 
     const formattedCategorySales = categorySales.map(category => {
       const totalPrice = roundCurrency(category.total_sales);
@@ -758,9 +774,9 @@ router.get('/inventory', async (req, res) => {
 
     query += ` ORDER BY p.category, stock_status DESC, p.name`;
 
-    const result = await db.all(query, params);
+    const result = await db.query(query, params);
     res.sendSuccess({
-      data: result,
+      data: result.rows,
       filters: { category: category || 'all', low_stock_only }
     });
   } catch (error) {
@@ -777,7 +793,7 @@ router.get('/inventory/summary', async (req, res) => {
   try {
     const db = await getDatabase();
 
-    const summary = await db.get(
+    const summaryResult = await db.query(
       `SELECT
         COUNT(DISTINCT p.id) as total_items,
         SUM(COALESCE(i.current_stock, 0)) as total_stock_value,
@@ -789,7 +805,7 @@ router.get('/inventory/summary', async (req, res) => {
       WHERE p.is_active = true`
     );
 
-    res.sendSuccess(summary || {});
+    res.sendSuccess(summaryResult.rows[0] || {});
   } catch (error) {
     console.error('Inventory summary error:', error);
     res.sendError('Failed to fetch inventory summary', 500, error.message);
@@ -810,7 +826,7 @@ router.get('/accounting', async (req, res) => {
       return res.sendError('startDate and endDate are required', 400);
     }
 
-    const accountingData = await db.get(
+    const accountingDataResult = await db.query(
       `SELECT
         COUNT(DISTINCT o.id) as total_transactions,
         COALESCE(SUM(o.total_amount), 0) as total_sales,
@@ -826,6 +842,7 @@ router.get('/accounting', async (req, res) => {
       [startDate, endDate]
     );
 
+    const accountingData = accountingDataResult.rows[0];
     const totalPrice = roundCurrency(accountingData?.total_sales || 0);
     const cashPrice = roundCurrency(accountingData?.cash_received || 0);
     const cardPrice = roundCurrency(accountingData?.card_received || 0);

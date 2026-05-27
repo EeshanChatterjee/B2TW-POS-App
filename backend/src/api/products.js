@@ -24,7 +24,8 @@ router.get('/', async (req, res) => {
 
     query += ' ORDER BY position';
 
-    const products = await db.all(query, params);
+    const productsResult = await db.query(query, params);
+    const products = productsResult.rows;
 
     res.sendSuccess({
       count: products.length,
@@ -44,10 +45,11 @@ router.get('/:id', async (req, res) => {
     const db = await getDatabase();
     const { id } = req.params;
 
-    const product = await db.get(
+    const productResult = await db.query(
       'SELECT * FROM products WHERE id = $1 AND is_active = true',
       [id]
     );
+    const product = productResult.rows[0];
 
     if (!product) {
       return res.sendError('Product not found', 404);
@@ -67,9 +69,10 @@ router.get('/categories/list', async (req, res) => {
   try {
     const db = await getDatabase();
 
-    const categories = await db.all(
+    const categoriesResult = await db.query(
       'SELECT id, name, position FROM categories ORDER BY position'
     );
+    const categories = categoriesResult.rows;
 
     res.sendSuccess({
       count: categories.length,
@@ -106,7 +109,7 @@ router.post('/', async (req, res) => {
     // Generate a UUID for the product
     const productId = randomUUID();
 
-    const result = await db.run(
+    await db.query(
       `INSERT INTO products (id, name, category, price, description, is_active, veg_type, position, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [productId, name, category, roundedPrice, description || null, is_active !== false ? true : false, veg_type || 'not_applicable', position || 0, new Date().toISOString()]
@@ -133,7 +136,8 @@ router.put('/:id', async (req, res) => {
     const { name, category, price, description, is_active, position, veg_type } = req.body;
 
     // Check if product exists
-    const product = await db.get('SELECT * FROM products WHERE id = $1', [id]);
+    const productResult = await db.query('SELECT * FROM products WHERE id = $1', [id]);
+    const product = productResult.rows[0];
     if (!product) {
       return res.sendError('Product not found', 404);
     }
@@ -185,7 +189,7 @@ router.put('/:id', async (req, res) => {
     values.push(new Date().toISOString());
     values.push(id);
 
-    await db.run(
+    await db.query(
       `UPDATE products SET ${updates.join(', ')} WHERE id = $${paramCount}`,
       values
     );
@@ -217,7 +221,7 @@ router.post('/batch/reorder', async (req, res) => {
         return res.sendError('Each update must have id and position', 400);
       }
 
-      await db.run(
+      await db.query(
         'UPDATE products SET position = $1, updated_at = $2 WHERE id = $3',
         [position, new Date().toISOString(), id]
       );
@@ -250,8 +254,8 @@ router.post('/categories/batch/reorder', async (req, res) => {
         return res.sendError('Each update must have id and position', 400);
       }
 
-      await db.run(
-        'UPDATE categories SET position = ?, updated_at = ? WHERE id = ?',
+      await db.query(
+        'UPDATE categories SET position = $1, updated_at = $2 WHERE id = $3',
         [position, new Date().toISOString(), id]
       );
     }
@@ -278,7 +282,8 @@ router.put('/:id/change-category', async (req, res) => {
     }
 
     // Check if product exists
-    const product = await db.get('SELECT * FROM products WHERE id = $1', [id]);
+    const productResult = await db.query('SELECT * FROM products WHERE id = $1', [id]);
+    const product = productResult.rows[0];
     if (!product) {
       return res.sendError('Product not found', 404);
     }
@@ -289,15 +294,15 @@ router.put('/:id/change-category', async (req, res) => {
     }
 
     // Find the maximum position in the new category
-    const maxPositionResult = await db.get(
+    const maxPositionResult = await db.query(
       'SELECT MAX(position) as max_position FROM products WHERE category = $1 AND is_active = true',
       [category]
     );
-
-    const newPosition = (maxPositionResult?.max_position ?? -1) + 1;
+    const maxPosRow = maxPositionResult.rows[0];
+    const newPosition = (maxPosRow?.max_position ?? -1) + 1;
 
     // Update product with new category and position
-    await db.run(
+    await db.query(
       'UPDATE products SET category = $1, position = $2, updated_at = $3 WHERE id = $4',
       [category, newPosition, new Date().toISOString(), id]
     );
@@ -328,12 +333,13 @@ router.delete('/:id', async (req, res) => {
         return res.sendError('For null IDs, name and category query params are required', 400);
       }
 
-      const product = await db.get('SELECT * FROM products WHERE id IS NULL AND name = $1 AND category = $2', [name, category]);
+      const productResult = await db.query('SELECT * FROM products WHERE id IS NULL AND name = $1 AND category = $2', [name, category]);
+      const product = productResult.rows[0];
       if (!product) {
         return res.sendError('Product not found', 404);
       }
 
-      await db.run(
+      await db.query(
         'UPDATE products SET is_active = false, updated_at = $1 WHERE id IS NULL AND name = $2 AND category = $3',
         [new Date().toISOString(), name, category]
       );
@@ -341,12 +347,13 @@ router.delete('/:id', async (req, res) => {
       return res.sendSuccess({ message: 'Product deleted successfully' });
     }
 
-    const product = await db.get('SELECT * FROM products WHERE id = ?', [id]);
+    const productResult = await db.query('SELECT * FROM products WHERE id = $1', [id]);
+    const product = productResult.rows[0];
     if (!product) {
       return res.sendError('Product not found', 404);
     }
 
-    await db.run(
+    await db.query(
       'UPDATE products SET is_active = false, updated_at = $1 WHERE id = $2',
       [new Date().toISOString(), id]
     );
