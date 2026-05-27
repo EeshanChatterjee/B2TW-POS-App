@@ -213,7 +213,13 @@ router.get('/customers', async (req, res) => {
       ORDER BY total_spent DESC`,
       params
     );
-    const customerStats = customerStatsResult.rows;
+    // Convert numeric values from PostgreSQL
+    const customerStats = customerStatsResult.rows.map(stat => ({
+      ...stat,
+      order_count: typeof stat.order_count === 'string' ? parseInt(stat.order_count) : (stat.order_count || 0),
+      total_spent: typeof stat.total_spent === 'string' ? parseFloat(stat.total_spent) : (stat.total_spent || 0),
+      avg_order_value: typeof stat.avg_order_value === 'string' ? parseFloat(stat.avg_order_value) : (stat.avg_order_value || 0)
+    }));
 
     // Overall metrics
     const metricsResult = await db.query(
@@ -226,12 +232,20 @@ router.get('/customers', async (req, res) => {
       LEFT JOIN orders o ON c.id = o.customer_id`,
       [startDate, endDate, startDate, endDate]
     );
-    const metrics = metricsResult.rows[0];
+    const metricsRow = metricsResult.rows[0];
+
+    // Convert numeric values in metrics
+    const metrics = metricsRow ? {
+      total_customers: typeof metricsRow.total_customers === 'string' ? parseInt(metricsRow.total_customers) : (metricsRow.total_customers || 0),
+      active_customers: typeof metricsRow.active_customers === 'string' ? parseInt(metricsRow.active_customers) : (metricsRow.active_customers || 0),
+      new_customers: typeof metricsRow.new_customers === 'string' ? parseInt(metricsRow.new_customers) : (metricsRow.new_customers || 0),
+      avg_customer_spend: typeof metricsRow.avg_customer_spend === 'string' ? parseFloat(metricsRow.avg_customer_spend) : (metricsRow.avg_customer_spend || 0)
+    } : {};
 
     res.sendSuccess({
       startDate,
       endDate,
-      metrics: metrics || {},
+      metrics,
       topCustomers: customerStats.slice(0, 20),
       data: customerStats
     });
