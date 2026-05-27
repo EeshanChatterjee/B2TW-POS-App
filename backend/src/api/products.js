@@ -5,6 +5,16 @@ import { getDatabase } from '../db/connection.js';
 const router = express.Router();
 
 /**
+ * Format product with numeric price (PostgreSQL may return as string)
+ */
+function formatProduct(product) {
+  return {
+    ...product,
+    price: typeof product.price === 'string' ? parseFloat(product.price) : (product.price || 0)
+  };
+}
+
+/**
  * GET /api/products
  * Get all products with optional category filtering
  * Query params: category (optional)
@@ -25,7 +35,7 @@ router.get('/', async (req, res) => {
     query += ' ORDER BY position';
 
     const productsResult = await db.query(query, params);
-    const products = productsResult.rows;
+    const products = productsResult.rows.map(formatProduct);
 
     res.sendSuccess({
       count: products.length,
@@ -55,7 +65,7 @@ router.get('/:id', async (req, res) => {
       return res.sendError('Product not found', 404);
     }
 
-    res.sendSuccess(product);
+    res.sendSuccess(formatProduct(product));
   } catch (error) {
     res.sendError('Failed to fetch product', 500, error.message);
   }
