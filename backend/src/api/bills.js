@@ -222,10 +222,16 @@ router.get('/', async (req, res) => {
 
     // Calculate GST breakdown for each bill
     const billsWithGst = bills.map(bill => {
-      const baseAmount = bill.total_amount / 1.05;
-      const gstAmount = bill.total_amount - baseAmount;
+      // Ensure total_amount is a number (PostgreSQL may return as string)
+      const totalAmount = typeof bill.total_amount === 'string'
+        ? parseFloat(bill.total_amount)
+        : bill.total_amount || 0;
+
+      const baseAmount = totalAmount / 1.05;
+      const gstAmount = totalAmount - baseAmount;
       return {
         ...bill,
+        total_amount: totalAmount,
         subtotal_base: parseFloat(baseAmount.toFixed(2)),
         gst_amount: parseFloat(gstAmount.toFixed(2))
       };

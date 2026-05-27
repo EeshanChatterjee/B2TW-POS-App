@@ -52,10 +52,16 @@ function formatOrderItem(item) {
  * @returns {Object} Formatted order with total_price and breakdown
  */
 function formatOrder(order) {
-  const breakdown = getPriceBreakdown(order.total_amount);
+  // Ensure total_amount is a number (PostgreSQL may return as string)
+  const totalAmount = typeof order.total_amount === 'string'
+    ? parseFloat(order.total_amount)
+    : order.total_amount || 0;
+
+  const breakdown = getPriceBreakdown(totalAmount);
   return {
     ...order,
-    total_price: order.total_amount,
+    total_amount: totalAmount,
+    total_price: totalAmount,
     base_price: breakdown.base_price,
     gst_amount: breakdown.gst_amount
   };

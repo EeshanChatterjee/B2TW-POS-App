@@ -53,9 +53,13 @@ router.get('/sales', async (req, res) => {
           breakdown: {}
         };
       }
-      salesByDate[order.date].orders += order.order_count;
-      salesByDate[order.date].total_price = sumTotalPrices([salesByDate[order.date].total_price, order.total_sales || 0]);
-      salesByDate[order.date].breakdown[order.payment_method || 'cash'] = order.total_sales;
+      // Ensure numeric values from PostgreSQL are actual numbers
+      const orderCount = typeof order.order_count === 'string' ? parseInt(order.order_count) : (order.order_count || 0);
+      const totalSales = typeof order.total_sales === 'string' ? parseFloat(order.total_sales) : (order.total_sales || 0);
+
+      salesByDate[order.date].orders += orderCount;
+      salesByDate[order.date].total_price = sumTotalPrices([salesByDate[order.date].total_price, totalSales]);
+      salesByDate[order.date].breakdown[order.payment_method || 'cash'] = totalSales;
     });
 
     // Calculate averages and add price breakdowns
@@ -137,10 +141,13 @@ router.get('/top-products', async (req, res) => {
 
     // Format products with price breakdowns calculated on-the-fly
     const productsWithBreakdown = topProducts.map(p => {
-      const totalPrice = roundCurrency(p.total_revenue);
+      // Ensure numeric values from PostgreSQL are actual numbers
+      const revenue = typeof p.total_revenue === 'string' ? parseFloat(p.total_revenue) : (p.total_revenue || 0);
+      const totalPrice = roundCurrency(revenue);
       const breakdown = getPriceBreakdown(totalPrice);
       return {
         ...p,
+        total_revenue: totalPrice,
         total_price: totalPrice,
         base_price: breakdown.base_price,
         gst_amount: breakdown.gst_amount
